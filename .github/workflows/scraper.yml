@@ -1,0 +1,38 @@
+name: Fahrradtermine recherchieren
+
+on:
+  schedule:
+    - cron: "37 5 * * *"
+      timezone: "Europe/Berlin"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Abhängigkeiten installieren
+        run: pip install -r requirements.txt
+
+      - name: Quellen durchsuchen
+        run: python src/scraper.py
+
+      - name: Prüfliste bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: fahrradtermine-kandidaten
+          path: output/candidates.json
+          if-no-files-found: error
+          retention-days: 14

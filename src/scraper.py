@@ -1,108 +1,114 @@
 
 import json
-import re
 from datetime import datetime
+from html import unescape
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
-import feedparser
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output"
 OUT.mkdir(exist_ok=True)
 
 BERLIN = ZoneInfo("Europe/Berlin")
-
 HEADERS = {
-    "User-Agent": "FahrradtermineBerlinBot/0.1 (event research)"
+    "User-Agent": "FahrradtermineBerlinBot/0.2 (event research)"
 }
 
-DATE_PATTERN = re.compile(
-    r"(?:Beginn|Start|Termin)?\s*:?\s*"
-    r"(\d{1,2})\.(\d{1,2})\.(\d{4})"
-    r"\s*(?:um\s*)?"
-    r"(\d{1,2})[:.](\d{2})\s*"
-    r"(?:Uhr|h)?",
-    re.IGNORECASE,
-)
 
-
-def fetch_html(url):
-    response = requests.get(url, headers=HEADERS, timeout=25)
+def fetch_json(url):
+    response = requests.get(url, headers=HEADERS, timeout=30)
     response.raise_for_status()
-    return response.text
+    return response.json()
 
 
-def scan_html(source):
-    soup = BeautifulSoup(fetch_html(source["url"]), "html.parser")
-
-    # Seitentitel möglichst aus der eigentlichen Überschrift holen
-    heading = soup.find("h1")
-    title = heading.get_text(" ", strip=True) if heading else ""
-
-    if not title and soup.title:
-        title = soup.title.get_text(" ", strip=True)
-
-    # Für die Datumserkennung störende Elemente entfernen
-    for element in soup.select("script, style, nav, footer, header"):
-        element.decompose()
-
-    text = soup.get_text(" ", strip=True)
-    match = DATE_PATTERN.search(text)
-
-    if not match:
-        print("Kein Startdatum gefunden:", source["url"])
-        return []
-
-    day, month, year, hour, minute = map(int, match.groups())
-
-    try:
-        start = datetime(
-            year, month, day, hour, minute, tzinfo=BERLIN
-        )
-    except ValueError:
-        print("Ungültiges Datum:", source["url"])
-        return []
-
-    # Nur zukünftige Veranstaltungen übernehmen
-    if start <= datetime.now(BERLIN):
-        print("Vergangen:", title, start.isoformat())
-        return []
-
-    # Titel aufräumen
-    title = re.sub(r"\s+", " ", title).strip()
-
-    return [{
-        "source": source["name"],
-        "page": source["url"],
-        "title": title,
-        "url": source["url"],
-        "context": text[:2000],
-        "date": start.isoformat(),
-        "start_time": start.isoformat(),
-        "status": "needs_review"
-    }]
+def clean_html(value):
+    if not value:
+        return ""
+    soup = BeautifulSoup(value, "html.parser")
+    return " ".join(soup.get_text(" ", strip=True).split())
 
 
-def scan_feed(source):
-    feed = feedparser.parse(source["url"])
+def scan_gancio(source):
+    events = fetch_json(source["url"])
+
+    if isinstance(events, dict):
+        events = events.get("events", [])
+
+    if not isinstance(events, list):
+        raise ValueError("Der JSON-Feed enthält keine Veranstaltungsliste")
+
+    now = datetime.now(BERLIN)
     found = []
+    past = 0
+    invalid = 0
 
-    for entry in feed.entries:
-        published = entry.get("published", None)
+    for event in events:
+        timestamp = event.get("start_datetime")
+
+        if not isinstance(timestamp, (int, float)):
+            invalid += 1
+            continue
+
+        start = datetime.fromtimestamp(timestamp, BERLIN)
+
+        # Nur Veranstaltungen, deren Beginn noch bevorsteht
+        if start <= now:
+            past += 1
+            continue
+
+        slug = event.get("slug", "")
+        event_url = (
+            "https://fahrradtermine-berlin.de/event/" + slug
+            if slug else source["url"]
+        )
+
+        place = event.get("place") or {}
+        tags = event.get("tags") or []
+
+        if isinstance(tags, list):
+            tags = [
+                tag.get("tag", "") if isinstance(tag, dict)
+                else str(tag)
+                for tag in tags
+            ]
+        else:
+            tags = []
+
         found.append({
             "source": source["name"],
             "page": source["url"],
-            "title": entry.get("title", ""),
-            "url": entry.get("link", source["url"]),
-            "context": entry.get("summary", "")[:1200],
-            "date": None,
-            "start_time": None,
-            "status": "needs_review",
-            "feed_published": published
+            "title": event.get("title", "").strip(),
+            "url": event_url,
+            "date": start.strftime("%Y-%m-%d"),
+            "start_time": start.isoformat(),
+            "display_time": start.strftime("%d.%m.%Y %H:%M"),
+            "end_time": (
+                datetime.fromtimestamp(
+                    event["end_datetime"], BERLIN
+                ).isoformat()
+                if isinstance(event.get("end_datetime"), (int, float))
+                else None
+            ),
+            "place": place.get("name", ""),
+            "address": place.get("address", ""),
+            "description": clean_html(event.get("description", "")),
+            "tags": tags,
+            "image": (
+                event.get("media", [{}])[0].get("name", "")
+                if event.get("media") else ""
+            ),
+            "status": "needs_review"
         })
+
+    found.sort(key=lambda item: item["start_time"])
+
+    print("Einträge im Feed:", len(events))
+    print("Vergangene oder bereits begonnene Termine:", past)
+    print("Einträge ohne gültige Startzeit:", invalid)
+    print("Zukünftige Termine:", len(found))
 
     return found
 
@@ -116,29 +122,22 @@ def main():
 
     for source in config["sources"]:
         try:
-            if source["type"] == "feed":
-                found.extend(scan_feed(source))
+            if source.get("type") == "gancio_json":
+                found.extend(scan_gancio(source))
             else:
-                found.extend(scan_html(source))
-            print("OK:", source["name"])
+                print("Noch nicht unterstützt:", source["name"])
         except Exception as exc:
-            print("FEHLER:", source["name"], str(exc))
+            print("FEHLER:", source["name"], repr(exc))
+            raise
 
-    # Doppelte Veranstaltungsseiten entfernen
-    unique = {item["url"]: item for item in found}
-
-    # Chronologisch nach Beginn sortieren
-    results = sorted(
-        unique.values(),
-        key=lambda item: item.get("start_time") or "9999"
-    )
-
-    (OUT / "candidates.json").write_text(
-        json.dumps(results, ensure_ascii=False, indent=2),
+    output_file = OUT / "candidates.json"
+    output_file.write_text(
+        json.dumps(found, ensure_ascii=False, indent=2),
         encoding="utf-8"
     )
 
-    print("Zukünftige Kandidaten:", len(results))
+    print("Gespeichert:", output_file)
+    print("Gesamtzahl:", len(found))
 
 
 if __name__ == "__main__":

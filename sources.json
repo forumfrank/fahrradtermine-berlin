@@ -1,15 +1,9 @@
-
 {
   "sources": [
     {
-      "name": "Grüne Fraktion Berlin – Mauerstreifzüge",
-      "url": "https://gruene-fraktion.berlin/termin/mauerstreifzuege-2026/",
-      "type": "html"
-    },
-    {
-      "name": "ADFC Berlin",
-      "url": "https://www.adfc-berlin.de/",
-      "type": "html"
+      "name": "Fahrradtermine Berlin – Gancio",
+      "url": "https://fahrradtermine-berlin.de/feed/json",
+      "type": "gancio_json"
     }
   ]
 }

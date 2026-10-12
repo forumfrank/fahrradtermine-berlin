@@ -120,10 +120,11 @@ def main():
             
             f'<div class="Zeit">{time_text}</div>',
            
-
+            f'<div class="Titel">{title}</div>',
+            
             f'<div class="Rubrik">{rubrik}</div>',
             
-            f'<div class="Titel">{title}</div>',
+            
             f'<div class="Ort">{place}</div>',
             f'<div class="Bemerkung">{esc(note)}</div>',
             f'<div class="Quelle"><a href="{url}">Quelle</a></div>',

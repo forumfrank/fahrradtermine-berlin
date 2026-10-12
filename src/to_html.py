@@ -67,7 +67,7 @@ def main():
     
     for dt, event in prepared:
 
-                if dt:
+        if dt:
             iso = dt.isocalendar()
             week = (iso.year, iso.week)
 

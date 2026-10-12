@@ -1,6 +1,6 @@
-from pathlib import Path
-p = Path("/mnt/data/scraper.py")
-code = r'''import json
+import json
+
+
 from datetime import datetime
 from html import unescape
 from pathlib import Path

@@ -65,6 +65,9 @@ def main():
     for dt, event in prepared:
         title = esc(event.get("title"))
         url = esc(event.get("url"))
+        
+        image_url = esc(event.get("image"))
+        
         place = esc(event.get("place") or event.get("address"))
         time_text = esc(display_time(event, dt))
         slug = esc(slug_from_url(event.get("url", "")))
@@ -77,7 +80,9 @@ def main():
             f"<!-- Gancio: {slug} -->",
             "<p>",
             '<div class="Rahmen">',
-            '<div class="Plakat"></div>',
+            
+            f'<div class="Plakat"><a href="{url}"><img src="{image_url}" alt="{title}" style="max-width:100%"></a></div>' if image_url else '<div class="Plakat"></div>',
+            
             f'<div class="Zeit">{time_text}</div>',
             '<div class="Rubrik"></div>',
             f'<div class="Titel">{title}</div>',

@@ -1,9 +1,15 @@
+
 {
   "sources": [
     {
       "name": "Fahrradtermine Berlin – Gancio",
       "url": "https://fahrradtermine-berlin.de/feed/json",
       "type": "gancio_json"
+    },
+    {
+      "name": "VELODEMO – Fahrraddemos in Berlin",
+      "url": "https://velodemo.de/",
+      "type": "velodemo_html"
     }
   ]
 }

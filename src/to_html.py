@@ -62,7 +62,35 @@ def main():
         "<!-- Automatisch aus output/candidates.json erzeugt; vor Veröffentlichung prüfen. -->",
         ""
     ]
+
+    current_week = None
+    
     for dt, event in prepared:
+
+                if dt:
+            iso = dt.isocalendar()
+            week = (iso.year, iso.week)
+
+            if week != current_week:
+                current_week = week
+
+                monday = dt.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                from datetime import timedelta
+                monday = monday - timedelta(days=dt.weekday())
+                sunday = monday + timedelta(days=6)
+
+                def short_date(d):
+                    return f"{d.day}.{d.month}."
+
+                blocks.append(
+                    f"# KW {iso.week} / "
+                    f"{short_date(monday)} - "
+                    f"{sunday.day}.{sunday.month}."
+                )
+                blocks.append("")
+        
         title = esc(event.get("title"))
         url = esc(event.get("url"))
         

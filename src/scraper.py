@@ -4,6 +4,8 @@ from datetime import datetime
 from html import unescape
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from urllib.parse import urljoin
+from bs4 import BeautifulSoup
 
 import requests
 from bs4 import BeautifulSoup
@@ -65,6 +67,8 @@ def scan_gancio(source):
             if slug else source["url"]
         )
 
+image_url = extract_image_url(url)
+        
         place = event.get("place") or {}
         tags = event.get("tags") or []
 
@@ -96,14 +100,17 @@ def scan_gancio(source):
             "address": place.get("address", ""),
             "description": clean_html(event.get("description", "")),
             "tags": tags,
-            "image": (
-                event.get("media", [{}])[0].get("name", "")
-                if event.get("media") else ""
-            ),
-            "status": "needs_review"
+    
+            
+            "image": image_url,
+"status": "needs_review"
         })
 
-    found.sort(key=lambda item: item["start_time"])
+    
+
+
+
+found.sort(key=lambda item: item["start_time"])
 
     print("Einträge im Feed:", len(events))
     print("Vergangene oder bereits begonnene Termine:", past)
@@ -111,6 +118,33 @@ def scan_gancio(source):
     print("Zukünftige Termine:", len(found))
 
     return found
+
+
+def extract_image_url(page_url):
+    """Bildadresse aus der Veranstaltungsseite auslesen."""
+    try:
+        response = requests.get(
+            page_url,
+            timeout=20,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Bevorzugt das für die Seite hinterlegte Vorschaubild
+        for selector in [
+            'meta[property="og:image"]',
+            'meta[name="twitter:image"]'
+        ]:
+            tag = soup.select_one(selector)
+            if tag and tag.get("content"):
+                return urljoin(page_url, tag["content"])
+
+    except Exception as exc:
+        print(f"Plakat nicht gefunden für {page_url}: {exc}")
+
+    return ""
+
 
 
 def main():

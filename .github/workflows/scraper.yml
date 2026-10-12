@@ -1,10 +1,9 @@
-name: Fahrradtermine recherchieren
+name: Fahrradtermine Berlin scraping
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "37 5 * * *"
-      timezone: "Europe/Berlin"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,8 +11,6 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
     steps:
       - name: Repository auschecken
         uses: actions/checkout@v4
@@ -21,18 +18,23 @@ jobs:
       - name: Python einrichten
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Abhängigkeiten installieren
         run: pip install -r requirements.txt
 
-      - name: Quellen durchsuchen
+      - name: Termine scrapen
         run: python src/scraper.py
 
-      - name: Prüfliste bereitstellen
+      - name: HedgeDoc-HTML erzeugen
+        run: python src/to_html.py
+
+      - name: JSON und HTML als Artefakte bereitstellen
         uses: actions/upload-artifact@v4
         with:
-          name: fahrradtermine-kandidaten
-          path: output/candidates.json
+          name: fahrradtermine-json-und-html
+          path: |
+            output/candidates.json
+            output/fahrradtermine.html
           if-no-files-found: error
           retention-days: 14

@@ -208,8 +208,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-'''
-p.write_text(code, encoding="utf-8")
-# Verify syntax before offering the file.
-compile(code, str(p), "exec")
-print(f"Fertige Datei erstellt und Syntax geprüft: {p}")
+

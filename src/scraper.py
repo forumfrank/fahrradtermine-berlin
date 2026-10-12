@@ -67,7 +67,7 @@ def scan_gancio(source):
             if slug else source["url"]
         )
 
-image_url = extract_image_url(url)
+        image_url = extract_image_url(url)
         
         place = event.get("place") or {}
         tags = event.get("tags") or []
@@ -103,8 +103,8 @@ image_url = extract_image_url(url)
     
             
             "image": image_url,
-"status": "needs_review"
-        })
+            "status": "needs_review"
+            })
 
     
 

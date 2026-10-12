@@ -131,7 +131,7 @@ def main():
             
             f'<div class="Ort">{place}</div>',
             f'<div class="Bemerkung">{esc(note)}</div>',
-            f'<div class="Quelle"><a href="{url}">Quelle</a></div>',
+            f'<div class="Quelle"><a href="{url}">{url}</a></div>',
             "</div></p>",
 
             "<hr>",

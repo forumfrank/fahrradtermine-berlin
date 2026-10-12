@@ -100,6 +100,9 @@ def main():
             f'<div class="Bemerkung">{esc(note)}</div>',
             f'<div class="Quelle"><a href="{url}">Quelle</a></div>',
             "</div></p>",
+
+            "<hr>",
+            
             ""
         ])
 

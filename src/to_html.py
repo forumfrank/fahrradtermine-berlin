@@ -41,6 +41,10 @@ def display_time(event, dt):
     weekday = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][dt.weekday()]
     current_year = datetime.now(BERLIN).year
     date_part = f"{dt.day}.{dt.month}." if dt.year == current_year else f"{dt.day}.{dt.month}.{dt.year}"
+
+    if event.get("time_unknown"):
+    return f"{weekday}, {date_part} – Uhrzeit offen"
+    
     time_part = f"{dt.hour}h" if dt.minute == 0 else f"{dt.hour}:{dt.minute:02d}h"
     return f"{weekday}, {date_part} {time_part}"
 

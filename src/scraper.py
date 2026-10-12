@@ -1,5 +1,5 @@
 import json
-
+import re
 
 from datetime import datetime
 from html import unescape
@@ -178,6 +178,202 @@ def scan_gancio(source):
     return found
 
 
+
+MONTHS = {
+    "januar": 1, "jan": 1,
+    "februar": 2, "feb": 2,
+    "märz": 3, "maerz": 3, "mrz": 3,
+    "april": 4, "apr": 4,
+    "mai": 5,
+    "juni": 6, "jun": 6,
+    "juli": 7, "jul": 7,
+    "august": 8, "aug": 8,
+    "september": 9, "sept": 9, "sep": 9,
+    "oktober": 10, "okt": 10,
+    "november": 11, "nov": 11,
+    "dezember": 12, "dez": 12,
+}
+
+
+def parse_velodemo_date(text):
+    """Deutsches Datum aus einer Überschrift lesen."""
+    match = re.search(
+        r"\b(?P<day>\d{1,2})\.\s*"
+        r"(?P<month>[A-Za-zÄÖÜäöüß]+)\.?\s*"
+        r"(?P<year>20\d{2})?\b",
+        text,
+        re.IGNORECASE,
+    )
+
+    if match:
+        month_name = match.group("month").lower().rstrip(".")
+        month = MONTHS.get(month_name)
+        if not month:
+            return None
+        year = int(match.group("year") or datetime.now(BERLIN).year)
+        day = int(match.group("day"))
+    else:
+        # Zusätzlich Datumsformate wie 31.10.2026 erkennen.
+        match = re.search(
+            r"\b(?P<day>\d{1,2})\.(?P<month>\d{1,2})"
+            r"(?:\.(?P<year>20\d{2}))?\.?\b",
+            text,
+        )
+        if not match:
+            return None
+        day = int(match.group("day"))
+        month = int(match.group("month"))
+        year = int(match.group("year") or datetime.now(BERLIN).year)
+
+    try:
+        return datetime(year, month, day, tzinfo=BERLIN)
+    except ValueError:
+        return None
+
+
+def scan_velodemo(source):
+    response = requests.get(
+        source["url"], headers=HEADERS, timeout=30
+    )
+    response.raise_for_status()
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    now = datetime.now(BERLIN)
+    found = []
+
+    for heading in soup.find_all(["h2", "h3"]):
+        event_date = parse_velodemo_date(
+            heading.get_text(" ", strip=True)
+        )
+        if not event_date:
+            continue
+
+        # Die Inhalte bis zur nächsten datierten Überschrift sammeln.
+        nodes = []
+        for node in heading.next_siblings:
+            if (
+                getattr(node, "name", None) in ("h2", "h3")
+                and parse_velodemo_date(node.get_text(" ", strip=True))
+            ):
+                break
+            if getattr(node, "name", None):
+                nodes.append(node)
+
+        lines = []
+        images = []
+        links = []
+
+        for node in nodes:
+            text = node.get_text(" ", strip=True)
+            if text:
+                lines.append(text)
+
+            if getattr(node, "name", None) == "img":
+                images.append(node)
+            images.extend(node.find_all("img"))
+
+            if getattr(node, "name", None) == "a":
+                links.append(node)
+            links.extend(node.find_all("a"))
+
+        # Startzeit und Ort aus Zeilen wie:
+        # "Start: 17:00 Uhr, Torstraße / Tucholskystraße"
+        start_match = None
+        place = ""
+        for line in lines:
+            match = re.search(
+                r"\bStart\s*:?\s*(?:um\s*)?"
+                r"(\d{1,2})(?:[:.](\d{2}))?"
+                r"\s*(?:Uhr)?\s*[,–-]?\s*(.*)",
+                line,
+                re.IGNORECASE,
+            )
+            if match:
+                start_match = match
+                place = match.group(3).strip(" ,–-")
+                break
+
+        time_unknown = start_match is None
+        hour = int(start_match.group(1)) if start_match else 12
+        minute = (
+            int(start_match.group(2) or 0)
+            if start_match else 0
+        )
+
+        start = event_date.replace(hour=hour, minute=minute)
+        if start <= now:
+            continue
+
+        title_candidates = [
+            line for line in lines
+            if not re.search(
+                r"^(Start|Beginn|Treffen|Zubringer|Ziel)\s*:?",
+                line,
+                re.IGNORECASE,
+            )
+        ]
+        title = (
+            title_candidates[0]
+            if title_candidates
+            else f"Fahrraddemo am {event_date:%d.%m.%Y}"
+        )
+
+        image_url = ""
+        for img in images:
+            src = (
+                img.get("src")
+                or img.get("data-src")
+                or img.get("data-lazy-src")
+                or ""
+            ).strip()
+            if src and not src.startswith("data:"):
+                image_url = urljoin(source["url"], src)
+                break
+
+        event_url = source["url"]
+        for link in links:
+            href = (link.get("href") or "").strip()
+            label = link.get_text(" ", strip=True)
+            if not href or not label or href.startswith("mailto:"):
+                continue
+            candidate = urljoin(source["url"], href)
+            if candidate.rstrip("/") == source["url"].rstrip("/"):
+                continue
+            if re.search(r"\.(jpe?g|png|gif|webp|svg)(?:\?|$)", candidate, re.I):
+                continue
+            event_url = candidate
+            break
+
+        found.append({
+            "source": source.get("name", "VELODEMO"),
+            "page": source["url"],
+            "title": title,
+            "url": event_url,
+            "date": start.strftime("%Y-%m-%d"),
+            "start_time": start.isoformat(),
+            "display_time": (
+                start.strftime("%d.%m.%Y %H:%M")
+                if not time_unknown
+                else start.strftime("%d.%m.%Y") + " – Uhrzeit offen"
+            ),
+            "end_time": None,
+            "place": place,
+            "address": place,
+            "description": " ".join(lines),
+            "tags": ["Fahrraddemo"],
+            "image": image_url,
+            "status": "needs_review",
+            "time_unknown": time_unknown,
+        })
+
+    found.sort(key=lambda item: item["start_time"])
+    print("VELODEMO: zukünftige Termine:", len(found))
+    print("VELODEMO: Termine mit Plakat:",
+          sum(bool(item["image"]) for item in found))
+    return found
+
+
+
 def main():
     config = json.loads(
         (ROOT / "sources.json").read_text(encoding="utf-8")
@@ -186,14 +382,17 @@ def main():
     found = []
 
     for source in config["sources"]:
-        try:
-            if source.get("type") == "gancio_json":
-                found.extend(scan_gancio(source))
-            else:
-                print("Noch nicht unterstützt:", source.get("name", source.get("type")))
-        except Exception as exc:
-            print("FEHLER:", source.get("name", "Unbekannte Quelle"), repr(exc))
-            raise
+        
+        
+    if source.get("type") == "gancio_json":
+        found.extend(scan_gancio(source))
+    elif source.get("type") == "velodemo_html":
+        found.extend(scan_velodemo(source))
+    else:
+        print("Noch nicht unterstützt:", source.get("name", source.get("type")))
+    except Exception as exc:
+        print("FEHLER:", source.get("name", "Unbekannte Quelle"), repr(exc))
+    raise
 
     output_file = OUT / "candidates.json"
     output_file.parent.mkdir(parents=True, exist_ok=True)

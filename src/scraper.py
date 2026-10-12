@@ -381,18 +381,28 @@ def main():
 
     found = []
 
-    for source in config["sources"]:
+    
         
         
-    if source.get("type") == "gancio_json":
-        found.extend(scan_gancio(source))
-    elif source.get("type") == "velodemo_html":
-        found.extend(scan_velodemo(source))
-    else:
-        print("Noch nicht unterstützt:", source.get("name", source.get("type")))
-    except Exception as exc:
-        print("FEHLER:", source.get("name", "Unbekannte Quelle"), repr(exc))
-    raise
+    
+        for source in config["sources"]:
+        try:
+            if source.get("type") == "gancio_json":
+                found.extend(scan_gancio(source))
+            elif source.get("type") == "velodemo_html":
+                found.extend(scan_velodemo(source))
+            else:
+                print(
+                    "Noch nicht unterstützt:",
+                    source.get("name", source.get("type"))
+                )
+        except Exception as exc:
+            print(
+                "FEHLER:",
+                source.get("name", "Unbekannte Quelle"),
+                repr(exc)
+            )
+            raise
 
     output_file = OUT / "candidates.json"
     output_file.parent.mkdir(parents=True, exist_ok=True)

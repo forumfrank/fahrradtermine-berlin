@@ -69,6 +69,13 @@ def main():
         image_url = esc(event.get("image"))
         
         place = esc(event.get("place") or event.get("address"))
+
+        tags = event.get("tags") or []
+        if isinstance(tags, list):
+            rubrik = esc(" ".join(str(tag).strip() for tag in tags if str(tag).strip()))
+        else:
+            rubrik = esc(tags)
+        
         time_text = esc(display_time(event, dt))
         slug = esc(slug_from_url(event.get("url", "")))
         note = ""
@@ -84,7 +91,10 @@ def main():
             f'<div class="Plakat"><a href="{url}"><img src="{image_url}" alt="{title}" style="max-width:100%"></a></div>' if image_url else '<div class="Plakat"></div>',
             
             f'<div class="Zeit">{time_text}</div>',
-            '<div class="Rubrik"></div>',
+           
+
+            f'<div class="Rubrik">{rubrik}</div>',
+            
             f'<div class="Titel">{title}</div>',
             f'<div class="Ort">{place}</div>',
             f'<div class="Bemerkung">{esc(note)}</div>',

@@ -385,7 +385,7 @@ def main():
         
         
     
-        for source in config["sources"]:
+    for source in config["sources"]:
         try:
             if source.get("type") == "gancio_json":
                 found.extend(scan_gancio(source))

@@ -36,5 +36,6 @@ jobs:
           path: |
             output/candidates.json
             output/fahrradtermine.html
+            output/velodemo.html
           if-no-files-found: error
           retention-days: 14

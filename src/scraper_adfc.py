@@ -165,9 +165,19 @@ def extract_item_list(payload):
     for key in ("eventItems", "items", "results", "events", "data", "result", "content"):
         value = payload.get(key)
         if isinstance(value, list):
-            total = payload.get("total") or payload.get("totalCount") or payload.get("count")
-            offset = payload.get("offset", payload.get("skip", 0))
-            return value, int(total) if str(total).isdigit() else None, int(offset) if str(offset).isdigit() else 0
+            total = (
+                payload.get("total")
+                or payload.get("totalCount")
+                or payload.get("totalElements")
+                or payload.get("totalResults")
+                or payload.get("count")
+            )
+            # Do not pretend the API explicitly returned offset=0 when the
+            # field is absent. The caller then advances its requested offset.
+            offset = payload.get("offset", payload.get("skip"))
+            parsed_total = int(total) if str(total).isdigit() else None
+            parsed_offset = int(offset) if offset is not None and str(offset).isdigit() else None
+            return value, parsed_total, parsed_offset
         if isinstance(value, dict):
             try:
                 return extract_item_list(value)
@@ -570,11 +580,12 @@ def scrape():
             print("ADFC: API lieferte eine bereits gesehene Seite erneut; Pagination beendet.")
             break
         offset = (returned_offset if returned_offset is not None else offset) + len(items)
-        if total_hint is not None:
-            if offset >= total_hint:
-                break
-        elif len(items) < LIMIT:
+        if total_hint is not None and offset >= total_hint:
             break
+        # Do not stop merely because this page contains fewer than LIMIT items:
+        # the API may apply its own smaller page size (for example, 20). In
+        # that case we must keep requesting offsets until an empty or repeated
+        # page arrives. Repeated-page detection above prevents an infinite loop.
 
     found.sort(key=lambda event: event["start_time"])
     OUT.mkdir(parents=True, exist_ok=True)

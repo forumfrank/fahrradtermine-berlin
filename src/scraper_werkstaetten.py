@@ -10,6 +10,8 @@ from urllib.parse import quote, urljoin
 import requests
 from bs4 import BeautifulSoup
 
+from werkstaetten_termine import expand_workshops
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output"
 NOTE_PAGE = "https://doc.adminforge.de/Fahradselbsthilfewerkst%C3%A4tten-Berlin"
@@ -444,13 +446,19 @@ def main():
         raise RuntimeError("Keine Werkstatt-Einträge erkannt; bitte Parserformat anpassen. Anfang des Downloads: " + preview)
     output = OUT / "candidates_werkstaetten.json"
     output.write_text(json.dumps(found, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    appointments = expand_workshops(found)
+    appointments_output = OUT / "termine_werkstaetten.json"
+    appointments_output.write_text(json.dumps(appointments, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    dated_count = sum(bool(e.get("date")) for e in appointments)
     print(f"Werkstätten: Parserformat = {mode}")
-    print(f"Werkstätten: Einträge erkannt = {len(found)}")
+    print(f"Werkstätten: Werkstätten erkannt = {len(found)}")
+    print(f"Werkstätten: konkrete Öffnungstermine im nächsten Halbjahr = {dated_count}")
+    print(f"Werkstätten: nicht automatisch interpretierbare Einträge = {len(appointments) - dated_count}")
     print(f"Werkstätten: Einträge mit Bild = {sum(bool(e['image']) for e in found)}")
-    print(f"Werkstätten: Einträge mit Zeitfeld = {sum(bool(e['display_time']) for e in found)}")
     print(f"Werkstätten: mit vorhandener Sprungmarke = {sum(bool(e.get('anchor_verified')) for e in found)}")
     print(f"Werkstätten: Sprungmarke muss ggf. in der Quelle ergänzt werden = {sum(not e.get('anchor_verified') for e in found)}")
     print(f"Gespeichert: {output}")
+    print(f"Gespeichert: {appointments_output}")
 
 
 if __name__ == "__main__":

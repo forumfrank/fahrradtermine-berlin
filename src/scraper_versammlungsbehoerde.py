@@ -388,18 +388,58 @@ def search_fallback_url(title: str) -> str:
 
 
 def existing_map_iframe(detail_url: str) -> str:
-    """Reuse an existing OpenStreetMap iframe, but never embed a full event page."""
+    """Reuse a standalone map iframe from a Demos event page, if one exists.
+
+    The Demos map is often rendered directly by JavaScript on the event page,
+    rather than exposed as a separate iframe. In that case this deliberately
+    returns an empty string: we do not embed the entire event page as if it were
+    a map, and the renderer can use the location-map fallback instead.
+    """
     if not detail_url.startswith("https://demonstrations.org/de/events/"):
         return ""
     try:
         soup = BeautifulSoup(get_page(detail_url, timeout=18), "html.parser")
-    except Exception:
+    except Exception as exc:
+        print(f"Hinweis: Demos-Kartenseite nicht lesbar ({detail_url}): {exc}")
         return ""
+
+    known_map_hosts = (
+        "openstreetmap.org", "google.com/maps", "maps.google.", "umap.",
+        "mapbox.com", "maptiler.com", "arcgis.com", "carto.com", "geoportal",
+    )
+    map_words = ("/map/", "map=", "map_id", "mapid", "route", "geojson", "embed.html")
+
     for iframe in soup.find_all("iframe", src=True):
-        src = urljoin(detail_url, html.unescape(iframe.get("src", "").strip()))
+        raw_src = html.unescape(iframe.get("src", "").strip())
+        src = urljoin(detail_url, raw_src)
         low = src.casefold()
-        if "openstreetmap.org/export/embed.html" in low or ("google.com/maps/embed" in low):
+        frame_label = " ".join([
+            str(iframe.get("title", "")), str(iframe.get("aria-label", "")),
+            str(iframe.get("name", "")),
+        ]).casefold()
+        host_match = any(host in low for host in known_map_hosts)
+        url_match = any(word in low for word in map_words)
+        label_match = any(word in frame_label for word in ("karte", "map", "route", "geo"))
+        if host_match or url_match or label_match:
+            # Never allow a general event-page URL to be mistaken for a map.
+            if urlparse(src).netloc.casefold() == "demonstrations.org" and "/de/events/" in urlparse(src).path:
+                continue
             return src
+
+    # Some sites keep embed URLs in data attributes instead of an iframe src.
+    for node in soup.find_all(True):
+        for attr, value in node.attrs.items():
+            if not str(attr).casefold().startswith("data-"):
+                continue
+            values = value if isinstance(value, list) else [value]
+            for raw in values:
+                text = str(raw).strip()
+                if not text.startswith(("http://", "https://", "//")):
+                    continue
+                src = urljoin(detail_url, html.unescape(text))
+                low = src.casefold()
+                if any(host in low for host in known_map_hosts) and any(word in low for word in map_words):
+                    return src
     return ""
 
 
@@ -500,6 +540,8 @@ def build_outputs(events: list[dict]) -> None:
         "",
         "# Versammlungsbehörde Berlin – Fahrrad, Klima, Bäume, A100 und THF",
         "",
+        "<style>.Zeit { color: red; }</style>",
+        "",
         "<!-- Einzel-URLs werden von demonstrations.org übernommen. Bei fehlender Einzelansicht zeigt der Link eine Suche. -->",
         "",
     ]
@@ -522,12 +564,15 @@ def build_outputs(events: list[dict]) -> None:
         notes = []
         if route and normalized(route) != normalized(event.get("place")):
             notes.append("Aufzugsstrecke: " + route)
+        map_url = event.get("map_url") or ""
+        map_type = event.get("map_type", "")
+        if route and map_url and map_type != "demonstrations":
+            notes.append("Die Karte zeigt hier nur den Startpunkt; die Routenkarte ist über den Link zur Einzelveranstaltung erreichbar.")
         if event.get("url_status") != "matched":
             fallback_count += 1
             notes.append("Einzelansicht bei demonstrations.org nicht automatisch zugeordnet; Suchlink verwenden.")
         note_html = f'<div class="Bemerkung">{esc(" · ".join(notes))}</div>' if notes else '<div class="Bemerkung"></div>'
 
-        map_url = event.get("map_url") or ""
         geo_html = ""
         if map_url:
             iframe_count += 1
@@ -541,13 +586,13 @@ def build_outputs(events: list[dict]) -> None:
         blocks.extend([
             f'<!-- Versammlungsbehörde: {esc(event.get("date"))} / {title} -->',
             '<div class="Rahmen" style="border:0;margin:0;padding:0">',
-            f'<div class="Zeit">{display}</div>',
+            f'<div class="Zeit" style="color:red">{display}</div>',
             f'<div class="Rubrik">{tag_html}</div>',
             f'<div class="Titel">{title}</div>',
             f'<div class="Ort">{place}</div>',
             note_html,
             geo_html,
-            f'<div class="Quelle"><a href="{url}">{"Einzeltermin auf demonstrations.org" if event.get("url_status") == "matched" else "Terminsuche auf demonstrations.org"}</a></div>',
+            f'<div class="Quelle"><a href="{url}">{"Karte / Route und Einzeltermin auf demonstrations.org" if event.get("url_status") == "matched" else "Terminsuche auf demonstrations.org"}</a></div>',
             '</div>',
             '<hr>',
             '',
@@ -595,11 +640,15 @@ def main() -> None:
     for event in events:
         direct_url = event.get("url", "")
         map_url = map_cache_by_url.get(direct_url, "") if event.get("url_status") == "matched" else ""
+        map_type = "demonstrations" if map_url else ""
         if not map_url:
             query = map_query_for_event(event)
             if query:
                 map_url = geocode_embed_url(query, geocode_cache)
+                if map_url:
+                    map_type = "osm_point"
         event["map_url"] = map_url
+        event["map_type"] = map_type
         event["display_time"] = display_time(event)
 
     print(f"Einzel-URLs zugeordnet: {matched} von {len(events)} Terminen.")

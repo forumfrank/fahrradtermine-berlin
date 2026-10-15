@@ -175,10 +175,58 @@ def combine_address_contact(address, contact):
     return f"{address} · {contact}"
 
 
-def event_for(title, image, opening, access, address, anchor, description=""):
-    title, opening, address = title_text(title), text_of(opening), text_of(address)
+def links_in(node):
+    """Return explicit external links from one source field as JSON-safe data."""
+    links = []
+    if node is None:
+        return links
+    for link in node.find_all("a"):
+        href = html.unescape((link.get("href") or "").strip())
+        label = text_of(link.get_text(" ", strip=True)) or href
+        if not href or href.startswith(("#", "javascript:")):
+            continue
+        if href.startswith("mailto:") or re.match(r"^https?://", href, re.I):
+            item = {"label": label, "url": href}
+            if item not in links:
+                links.append(item)
+    return links
+
+
+def map_src(node):
+    """Extract an OSM embed URL from a workshop card."""
+    iframe = node.find("iframe", class_="geodat") if node is not None else None
+    src = html.unescape((iframe.get("src") or "").strip()) if iframe else ""
+    if src.startswith("https://www.openstreetmap.org/export/embed.html?"):
+        return src
+    return ""
+
+
+def split_legacy_combined_field(node):
+    """Best-effort support for old cards where address and contact shared AdrURLKont."""
+    if node is None:
+        return "", ""
+    clone = BeautifulSoup(str(node), "html.parser")
+    field = clone.find()
+    if field is None:
+        return text_of(node.get_text(" ", strip=True)), ""
+    for link in field.find_all("a"):
+        link.decompose()
+    plain = text_of(field.get_text(" ", strip=True))
+    # Most legacy entries put the street first and contact details after a
+    # phone/email/site marker. Do not try to invent an address if none exists.
+    match = re.search(r"\s+(?=Telefon\b|Tel\.?\b|mail\s*:|E-?Mail\s*:|https?://|www\.)", plain, re.I)
+    if match:
+        return plain[:match.start()].strip(" ·,;"), plain[match.start():].strip(" ·,;")
+    return plain, ""
+
+
+def event_for(title, image, opening, access, address, anchor, description="", contact="", contact_links=None, map_url=""):
+    title = title_text(title)
+    opening = text_of(opening)
+    address = text_of(address)
+    contact = text_of(contact)
     access = text_of(access)
-    if not title or not address:
+    if not title or not (address or contact or opening or image):
         return None
     anchor = anchor or slugify(title)
     return {
@@ -193,6 +241,9 @@ def event_for(title, image, opening, access, address, anchor, description=""):
         "end_time": None,
         "place": address,
         "address": address,
+        "contact": contact,
+        "contact_links": contact_links or [],
+        "map_url": map_url or "",
         "description": text_of(description),
         "tags": [access] if access else [],
         "access_notes": access,
@@ -217,29 +268,44 @@ def parse_class_cards(soup):
     for node in eligible:
         if any(child in eligible_set for child in node.find_all(True)):
             continue
-        vals = {}
+        vals, field_nodes = {}, {}
         for kind in FIELDS:
             for desc in [node] + node.find_all(True):
                 labels = list(desc.get("class") or []) + ([desc.get("id")] if desc.get("id") else [])
-                if any(field_key(label) == kind for label in labels if label):
-                    vals[kind] = get_img("", desc) if kind == "image" else field_text(desc, keep_links=(kind in ("address", "contact")))
-                    if vals[kind]:
-                        break
+                matched = [label for label in labels if field_key(label) == kind]
+                if not matched:
+                    continue
+                label_norms = {norm(label) for label in matched}
+                if kind == "image":
+                    value = get_img("", desc)
+                elif kind == "address" and label_norms.intersection({"adrurlkont", "adrurlkontakt"}):
+                    value, legacy_contact = split_legacy_combined_field(desc)
+                    if legacy_contact and not vals.get("contact"):
+                        vals["contact"] = legacy_contact
+                        field_nodes["contact"] = desc
+                else:
+                    value = field_text(desc, keep_links=False)
+                if value:
+                    vals[kind] = value
+                    field_nodes[kind] = desc
+                    break
         if not vals.get("title"):
             h = node.find(["h1", "h2", "h3", "h4"])
             vals["title"] = text_of(h.get_text(" ", strip=True)) if h else ""
         anchor = anchor_for(node, vals.get("title", ""))
-        combined_address = combine_address_contact(vals.get("address"), vals.get("contact"))
+        map_url = map_src(node)
+        contact_node = field_nodes.get("contact")
+        contact_links = links_in(contact_node)
         ev = event_for(
             vals.get("title"), vals.get("image") or get_img("", node),
-            vals.get("opening"), vals.get("access"), combined_address,
-            anchor,
+            vals.get("opening"), vals.get("access"), vals.get("address"),
+            anchor, contact=vals.get("contact", ""), contact_links=contact_links,
+            map_url=map_url,
         )
         if ev:
             ev["anchor_verified"] = has_explicit_anchor(node)
             found.append(ev)
     return found
-
 
 def parse_html_tables(soup):
     found = []
@@ -261,8 +327,8 @@ def parse_html_tables(soup):
                 return text_of(vals[key].get_text(" ", strip=True))
             title = val("title")
             image = get_img("", vals.get("image")) if vals.get("image") else ""
-            address = combine_address_contact(val("address"), val("contact"))
-            ev = event_for(title, image, val("opening"), val("access"), address, anchor_for(row, title))
+            ev = event_for(title, image, val("opening"), val("access"), val("address"), anchor_for(row, title),
+                           contact=val("contact"), contact_links=links_in(vals.get("contact")))
             if ev:
                 found.append(ev)
     return found
@@ -293,8 +359,8 @@ def parse_markdown_tables(raw):
             vals = {key: cells[pos] if pos < len(cells) else "" for key, pos in idx.items()}
             title = title_text(vals.get("title"))
             image = get_img(vals.get("image", ""))
-            address = combine_address_contact(vals.get("address"), vals.get("contact"))
-            ev = event_for(title, image, vals.get("opening"), vals.get("access"), address, slugify(title))
+            ev = event_for(title, image, vals.get("opening"), vals.get("access"), vals.get("address"), slugify(title),
+                           contact=vals.get("contact"))
             if ev:
                 found.append(ev)
             i += 1
@@ -324,8 +390,8 @@ def parse_heading_sections(raw):
         if not vals.get("opening") or not vals.get("address"):
             continue
         title = vals.get("title") or sec["title"]
-        address = combine_address_contact(vals.get("address"), vals.get("contact"))
-        ev = event_for(title, get_img(vals.get("image", "")) or get_img(raw_section), vals["opening"], vals.get("access", ""), address, slugify(sec["title"]), raw_section)
+        ev = event_for(title, get_img(vals.get("image", "")) or get_img(raw_section), vals["opening"], vals.get("access", ""), vals.get("address", ""), slugify(sec["title"]), raw_section,
+                       contact=vals.get("contact", ""))
         if ev:
             found.append(ev)
     return found
@@ -343,12 +409,24 @@ def dedupe(events):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    response = requests.get(NOTE_DOWNLOAD, headers=HEADERS, timeout=40)
+    headers = dict(HEADERS)
+    headers["Cache-Control"] = "no-cache"
+    headers["Pragma"] = "no-cache"
+    response = requests.get(NOTE_DOWNLOAD, headers=headers, timeout=40)
     response.raise_for_status()
+    print(f"Werkstätten: Download-URL = {response.url}")
+    print(f"Werkstätten: Content-Type = {response.headers.get('Content-Type', 'unbekannt')}")
+    print(f"Werkstätten: Downloadgröße = {len(response.content)} Bytes")
     raw = response.content.decode(response.encoding or "utf-8", errors="replace").lstrip("\ufeff")
     if not raw.strip():
         raise RuntimeError("HedgeDoc-Download war leer.")
     soup = BeautifulSoup(raw, "html.parser")
+    legacy_cards = len(soup.select(".Rahmen .AdrURLKont"))
+    split_address_cards = len(soup.select(".Rahmen .Adresse"))
+    split_contact_cards = len(soup.select(".Rahmen .Kontakt"))
+    print(f"Werkstätten: Quellfelder Adresse={split_address_cards}, Kontakt={split_contact_cards}, altes AdrURLKont={legacy_cards}")
+    if legacy_cards and not split_address_cards:
+        print("WARNUNG: HedgeDoc-Download scheint noch das alte kombinierte Feld AdrURLKont zu enthalten. Prüfe, ob die letzte Bearbeitung gespeichert wurde und ob NOTE_PAGE auf die richtige Notiz zeigt.")
     found = parse_class_cards(soup)
     mode = "HTML-Karten"
     if not found:

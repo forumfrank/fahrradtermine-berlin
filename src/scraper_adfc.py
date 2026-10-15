@@ -2,11 +2,12 @@
 """Fetch upcoming ADFC events via the official RVP REST API.
 
 Writes output/candidates_adfc.json. The query mirrors the user's public search:
-Berlin center, 30 km radius, from today through the next 365 days.
+Berlin center, 30 km radius, from today through the next three calendar months.
 """
 import json
 import re
-from datetime import date, datetime, time, timedelta
+from calendar import monthrange
+from datetime import date, datetime, time
 from pathlib import Path
 from urllib.parse import quote, urljoin
 from zoneinfo import ZoneInfo
@@ -25,7 +26,7 @@ SEARCH_PAGE = (
 LAT_LNG = "52.517,13.3888"
 CENTER_LAT, CENTER_LON = (float(part) for part in LAT_LNG.split(","))
 DISTANCE_KM = 30
-DAYS_AHEAD = 365
+MONTHS_AHEAD = 3
 LIMIT = 100
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; FahrradtermineBerlinBot/0.5; event research)",
@@ -492,9 +493,18 @@ def fetch_page(session, beginning, end, offset):
         raise ValueError(f"ADFC-API lieferte kein JSON (HTTP {response.status_code}, URL {response.url}).") from exc
 
 
+def add_months(value, months):
+    """Add calendar months, clamping the day at month end if necessary."""
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, monthrange(year, month)[1])
+    return date(year, month, day)
+
+
 def scrape():
     today = datetime.now(BERLIN).date()
-    end = today + timedelta(days=DAYS_AHEAD)
+    end = add_months(today, MONTHS_AHEAD)
     session = requests.Session()
     session.headers.update(HEADERS)
 

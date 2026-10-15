@@ -68,8 +68,23 @@ def deduplicate(events):
 
 
 def display_time(event, dt):
+    """Format date/time for either source, with a safe stored-value fallback."""
+    stored_display = str(event.get("display_time") or "").strip()
+    if event.get("time_unknown"):
+        if dt:
+            weekday = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][dt.weekday()]
+            current_year = datetime.now(BERLIN).year
+            date_part = (
+                f"{dt.day}.{dt.month}."
+                if dt.year == current_year
+                else f"{dt.day}.{dt.month}.{dt.year}"
+            )
+            return f"{weekday}, {date_part} – Uhrzeit offen"
+        return stored_display or (str(event.get("date") or "") + " – Uhrzeit offen")
+
     if not dt:
-        return event.get("date", "")
+        return stored_display or str(event.get("date") or "")
+
     weekday = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][dt.weekday()]
     current_year = datetime.now(BERLIN).year
     date_part = (
@@ -77,8 +92,6 @@ def display_time(event, dt):
         if dt.year == current_year
         else f"{dt.day}.{dt.month}.{dt.year}"
     )
-    if event.get("time_unknown"):
-        return f"{weekday}, {date_part} – Uhrzeit offen"
     time_part = f"{dt.hour}h" if dt.minute == 0 else f"{dt.hour}:{dt.minute:02d}h"
     return f"{weekday}, {date_part} {time_part}"
 
@@ -164,6 +177,7 @@ def render(events, kind, output_file):
             "<p>",
             '<div class="Rahmen">',
             poster,
+            # Zeit wird in beiden Quelldateien ausgegeben (FTB und VELODEMO).
             f'<div class="Zeit">{time_text}</div>',
             f'<div class="Rubrik">{rubrik}</div>',
             f'<div class="Titel">{title}</div>',
@@ -171,6 +185,7 @@ def render(events, kind, output_file):
             f'<div class="Bemerkung">{esc(note)}</div>',
             f'<div class="Quelle"><a href="{url}">{url}</a></div>',
             "</div></p>",
+            # Wie bei FTB wird jeder Termin durch eine horizontale Linie abgeschlossen.
             "<hr>",
             "",
         ])

@@ -12,12 +12,14 @@ OUTPUT = ROOT / "output" / "werkstaetten.html"
 
 CSS = r"""
 <style>
-.Rahmen { border: 4px solid #999; padding: 10px; margin: 12px 0; border-radius: 5px; }
-.Zeit { font-weight: bold; margin-bottom: 5px; }
-.Titel { font-size: 1.15em; font-weight: bold; margin-bottom: 6px; }
-.Ort, .Quelle, .Plakat, .ZugangBeson { margin-top: 6px; overflow-wrap: anywhere; }
-.Plakat img { max-width: 100%; width: 320px; height: auto; }
-.KW { margin: 20px 0 8px; padding: 6px; background: #eee; font-weight: bold; }
+	.Zeit {color: red
+}
+	.Rubrik {color: green
+}
+	.Titel {font-weight: bold
+}
+	.Rahmen {border: 4px solid #999;
+}
 </style>
 """
 
@@ -45,7 +47,7 @@ def render_event(item):
     address = str(item.get("address") or item.get("place") or "").strip()
     access = str(item.get("access_notes") or "").strip()
     url = safe_http_url(item.get("url") or item.get("page"))
-    parts = [f'<div class="Rahmen" id="{esc(anchor)}">']
+    parts = [f'<p>\n<div class="Rahmen" id="{esc(anchor)}">']
     if date_value:
         parts.append(f'<div class="Zeit">{esc(opening)}</div>')
     else:
@@ -54,12 +56,12 @@ def render_event(item):
     if address:
         parts.append(f'<div class="Ort">{esc(address)}</div>')
     if access:
-        parts.append(f'<div class="ZugangBeson">{esc(access)}</div>')
+        parts.append(f'<div class="Rubrik">{esc(access)}</div>')
     if image:
-        parts.append(f'<div class="Plakat"><a href="{esc(image)}"><img src="{esc(image)}" alt="Bild: {esc(title)}"></a></div>')
+        parts.append(f'<div class="Plakat"><a href="{esc(url or image)}"><img src="{esc(image)}" alt="Bild: {esc(title)}" style="max-width:100%"></a></div>')
     if url:
         parts.append(f'<div class="Quelle"><a href="{esc(url)}">Werkstatt-Info / Quelle</a></div>')
-    parts.append('</div>')
+    parts.append('</div>\n</p>')
     return "\n".join(parts)
 
 

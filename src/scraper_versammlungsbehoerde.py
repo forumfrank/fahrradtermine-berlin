@@ -33,6 +33,16 @@ BERLIN_URL = "https://www.berlin.de/polizei/service/versammlungsbehoerde/versamm
 DEMO_URL = "https://demonstrations.org/de/events"
 BERLIN = ZoneInfo("Europe/Berlin")
 
+# Feste Korrekturen für bekannte Einzelansichten, die trotz korrektem Titel
+# gelegentlich nicht aus der Ergebnisliste zugeordnet werden.
+KNOWN_DEMO_URL_OVERRIDES = [
+    {
+        "date": "2026-10-16",
+        "title_contains": "sichere schulwege machen unsere kinder stark neumannstrasse fur alle sicher machen",
+        "url": "https://demonstrations.org/de/events/63038--sichere-schulwege-machen-unsere-kinder-stark--neumannstra-e-f-r-alle-sicher-machen--gefordert-wird-d",
+    },
+]
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; FahrradtermineBerlinBot/1.0; GitHub project forumfrank/fahrradtermine-berlin)",
     "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
@@ -360,6 +370,14 @@ def title_match_score(source_title: str, demo_title: str) -> float:
     return max(seq, overlap * 0.92)
 
 
+def known_demo_url_override(event: dict) -> str:
+    title = normalized(event.get("title", ""))
+    for override in KNOWN_DEMO_URL_OVERRIDES:
+        if event.get("date") == override["date"] and override["title_contains"] in title:
+            return override["url"]
+    return ""
+
+
 def match_demo_url(event: dict, candidates: list[dict]) -> str:
     best_item, best_score = None, 0.0
     source_dt = datetime.fromisoformat(event["start_time"])
@@ -387,61 +405,47 @@ def search_fallback_url(title: str) -> str:
     return DEMO_URL + "?" + urlencode({"search": title})
 
 
-def existing_map_iframe(detail_url: str) -> str:
-    """Reuse a standalone map iframe from a Demos event page, if one exists.
+def inspect_demo_map(detail_url: str) -> tuple[str, str]:
+    """Return (dedicated map iframe URL, page anchor for map fallback).
 
-    The Demos map is often rendered directly by JavaScript on the event page,
-    rather than exposed as a separate iframe. In that case this deliberately
-    returns an empty string: we do not embed the entire event page as if it were
-    a map, and the renderer can use the location-map fallback instead.
+    Some Demos pages use a map iframe. Others draw their route directly in the
+    event page with JavaScript, so they have no standalone map URL. In that case
+    detect a likely map container id and return its fragment for a page-iframe
+    fallback (e.g. detail_url + "#map").
     """
     if not detail_url.startswith("https://demonstrations.org/de/events/"):
-        return ""
+        return "", "#map"
     try:
         soup = BeautifulSoup(get_page(detail_url, timeout=18), "html.parser")
     except Exception as exc:
-        print(f"Hinweis: Demos-Kartenseite nicht lesbar ({detail_url}): {exc}")
-        return ""
+        print(f"Hinweis: Einzelansicht für Kartenprüfung nicht abrufbar: {exc}")
+        return "", "#map"
 
-    known_map_hosts = (
-        "openstreetmap.org", "google.com/maps", "maps.google.", "umap.",
-        "mapbox.com", "maptiler.com", "arcgis.com", "carto.com", "geoportal",
-    )
-    map_words = ("/map/", "map=", "map_id", "mapid", "route", "geojson", "embed.html")
-
+    map_terms = ("map", "maps", "route", "geo", "leaflet", "openstreetmap", "google.com/maps",
+                 "mapbox", "arcgis", "carto", "geodata", "karte", "aufzug")
     for iframe in soup.find_all("iframe", src=True):
-        raw_src = html.unescape(iframe.get("src", "").strip())
-        src = urljoin(detail_url, raw_src)
-        low = src.casefold()
-        frame_label = " ".join([
-            str(iframe.get("title", "")), str(iframe.get("aria-label", "")),
-            str(iframe.get("name", "")),
+        src = urljoin(detail_url, html.unescape(iframe.get("src", "").strip()))
+        descriptor = " ".join([
+            src,
+            iframe.get("title", ""),
+            " ".join(iframe.get("class", [])),
+            iframe.get("id", ""),
         ]).casefold()
-        host_match = any(host in low for host in known_map_hosts)
-        url_match = any(word in low for word in map_words)
-        label_match = any(word in frame_label for word in ("karte", "map", "route", "geo"))
-        if host_match or url_match or label_match:
-            # Never allow a general event-page URL to be mistaken for a map.
-            if urlparse(src).netloc.casefold() == "demonstrations.org" and "/de/events/" in urlparse(src).path:
-                continue
-            return src
+        if any(term in descriptor for term in map_terms):
+            return src, "#map"
 
-    # Some sites keep embed URLs in data attributes instead of an iframe src.
-    for node in soup.find_all(True):
-        for attr, value in node.attrs.items():
-            if not str(attr).casefold().startswith("data-"):
-                continue
-            values = value if isinstance(value, list) else [value]
-            for raw in values:
-                text = str(raw).strip()
-                if not text.startswith(("http://", "https://", "//")):
-                    continue
-                src = urljoin(detail_url, html.unescape(text))
-                low = src.casefold()
-                if any(host in low for host in known_map_hosts) and any(word in low for word in map_words):
-                    return src
-    return ""
-
+    # Map implementations such as Leaflet commonly use a dedicated container id.
+    candidates = []
+    for node in soup.find_all(["div", "section", "article", "main"]):
+        node_id = str(node.get("id", "")).strip()
+        descriptor = " ".join([node_id, " ".join(node.get("class", []))]).casefold()
+        if node_id and any(term in descriptor for term in ("map", "karte", "geo", "route", "aufzug", "leaflet")):
+            priority = 0 if node_id.casefold() in {"map", "mapid", "route-map", "map-container", "geo-map"} else 1
+            candidates.append((priority, node_id))
+    if candidates:
+        candidates.sort()
+        return "", "#" + quote(candidates[0][1], safe="-_.:")
+    return "", "#map"
 
 def map_query_for_event(event: dict) -> str:
     """Use the stationary location or first route stop for a map marker."""
@@ -540,8 +544,6 @@ def build_outputs(events: list[dict]) -> None:
         "",
         "# Versammlungsbehörde Berlin – Fahrrad, Klima, Bäume, A100 und THF",
         "",
-        "<style>.Zeit { color: red; }</style>",
-        "",
         "<!-- Einzel-URLs werden von demonstrations.org übernommen. Bei fehlender Einzelansicht zeigt der Link eine Suche. -->",
         "",
     ]
@@ -564,22 +566,25 @@ def build_outputs(events: list[dict]) -> None:
         notes = []
         if route and normalized(route) != normalized(event.get("place")):
             notes.append("Aufzugsstrecke: " + route)
-        map_url = event.get("map_url") or ""
-        map_type = event.get("map_type", "")
-        if route and map_url and map_type != "demonstrations":
-            notes.append("Die Karte zeigt hier nur den Startpunkt; die Routenkarte ist über den Link zur Einzelveranstaltung erreichbar.")
         if event.get("url_status") != "matched":
             fallback_count += 1
             notes.append("Einzelansicht bei demonstrations.org nicht automatisch zugeordnet; Suchlink verwenden.")
         note_html = f'<div class="Bemerkung">{esc(" · ".join(notes))}</div>' if notes else '<div class="Bemerkung"></div>'
 
+        map_url = event.get("map_url") or ""
         geo_html = ""
         if map_url:
             iframe_count += 1
+            if event.get("map_embed_type") == "detail_page":
+                iframe_title = f"Kartenansicht in der Einzelveranstaltung zu {title}"
+                iframe_height = 460
+            else:
+                iframe_title = f"Karte zu {title}"
+                iframe_height = 240
             geo_html = (
-                f'<div class="GeoFenster"><iframe src="{esc(map_url)}" title="Karte zu {title}" '
+                f'<div class="GeoFenster"><iframe src="{esc(map_url)}" title="{esc(iframe_title)}" '
                 'loading="lazy" referrerpolicy="no-referrer-when-downgrade" '
-                'style="width:100%;max-width:500px;height:240px;border:0" allowfullscreen></iframe></div>'
+                f'style="width:100%;max-width:500px;height:{iframe_height}px;border:0" allowfullscreen></iframe></div>'
             )
 
         tag_html = esc(" · ".join(event.get("matched_keywords") or []))
@@ -592,7 +597,7 @@ def build_outputs(events: list[dict]) -> None:
             f'<div class="Ort">{place}</div>',
             note_html,
             geo_html,
-            f'<div class="Quelle"><a href="{url}">{"Karte / Route und Einzeltermin auf demonstrations.org" if event.get("url_status") == "matched" else "Terminsuche auf demonstrations.org"}</a></div>',
+            f'<div class="Quelle"><a href="{url}">{"Einzeltermin auf demonstrations.org" if event.get("url_status") == "matched" else "Terminsuche auf demonstrations.org"}</a></div>',
             '</div>',
             '<hr>',
             '',
@@ -618,7 +623,7 @@ def main() -> None:
     demo_links = collect_demo_links()
     matched = 0
     for event in events:
-        direct = match_demo_url(event, demo_links)
+        direct = known_demo_url_override(event) or match_demo_url(event, demo_links)
         if direct:
             event["url"] = direct
             event["url_status"] = "matched"
@@ -629,26 +634,32 @@ def main() -> None:
 
     # Prefer a map/route iframe already present on the single event page.
     # Repeated events in a series share the same URL and are only fetched once.
-    map_cache_by_url: dict[str, str] = {}
+    map_cache_by_url: dict[str, tuple[str, str]] = {}
     unique_urls = list(dict.fromkeys(e["url"] for e in events if e.get("url_status") == "matched"))
     for idx, direct_url in enumerate(unique_urls[:50], start=1):
-        map_cache_by_url[direct_url] = existing_map_iframe(direct_url)
+        map_cache_by_url[direct_url] = inspect_demo_map(direct_url)
         if idx % 10 == 0:
             print(f"Kartenquelle geprüft: {idx}/{min(50, len(unique_urls))}")
 
     geocode_cache: dict[str, str] = {}
     for event in events:
         direct_url = event.get("url", "")
-        map_url = map_cache_by_url.get(direct_url, "") if event.get("url_status") == "matched" else ""
-        map_type = "demonstrations" if map_url else ""
-        if not map_url:
+        map_url, map_anchor = map_cache_by_url.get(direct_url, ("", "#map")) if event.get("url_status") == "matched" else ("", "#map")
+        if map_url:
+            event["map_embed_type"] = "map_iframe"
+        elif event.get("url_status") == "matched":
+            # On some Demos event pages the route is rendered in the page itself,
+            # not as a separate map iframe. Try anchoring the page to its map.
+            # If the site disallows framing or has no suitable anchor, the normal
+            # direct link below the iframe remains available.
+            map_url = direct_url + map_anchor
+            event["map_embed_type"] = "detail_page"
+        else:
             query = map_query_for_event(event)
             if query:
                 map_url = geocode_embed_url(query, geocode_cache)
-                if map_url:
-                    map_type = "osm_point"
+                event["map_embed_type"] = "osm_point" if map_url else ""
         event["map_url"] = map_url
-        event["map_type"] = map_type
         event["display_time"] = display_time(event)
 
     print(f"Einzel-URLs zugeordnet: {matched} von {len(events)} Terminen.")

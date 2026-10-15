@@ -41,6 +41,14 @@ jobs:
       - name: Getrennte HedgeDoc-HTML-Dateien erzeugen
         run: python src/to_html.py
 
+      # In .github/workflows/scrape.yml direkt NACH dem Schritt einfügen,
+      # der alle normalen Event-HTML-Dateien mit src/to_html.py erzeugt.
+      # Wichtig: Dieser Schritt muss nach dem allgemeinen HTML-Konverter kommen,
+      # damit dessen leere werkstaetten.html nicht mehr überschreibt.
+
+      - name: Render Werkstätten HTML
+        run: python src/render_werkstaetten.py
+
       - name: JSON und HTML als Artefakte bereitstellen
         uses: actions/upload-artifact@v4
         with:

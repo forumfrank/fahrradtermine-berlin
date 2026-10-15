@@ -29,7 +29,7 @@ DISTANCE_KM = 30
 MONTHS_AHEAD = 3
 LIMIT = 100
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; FahrradtermineBerlinBot/0.5; event research)",
+    "User-Agent": "Mozilla/5.0 (compatible; FahrradtermineBerlinBot/0.6; event research)",
     "Accept": "application/json, text/plain, */*",
 }
 
@@ -484,7 +484,43 @@ def _numeric_event_id(item):
 
 
 def event_url(item, title):
-    """Return the specific public detail page, never the generic search URL when avoidable."""
+    """Return the direct public ADFC detail page for this specific event."""
+
+    # The API's cSlug field already contains the complete public route slug,
+    # e.g. "204900-lokale-beteiligung-und-die-rolle-des-adfc-online".
+    # This is more reliable than deriving a slug from the title or using the
+    # search page (which was the bug in earlier versions).
+    for field in (
+        "cSlug", "eventSlug", "urlSlug", "seoSlug", "slugName",
+        "permalinkSlug", "slug",
+    ):
+        value = first_direct(item, (field,))
+        if value is None:
+            value = find_value(item, (field,), max_depth=4)
+        slug = clean(value).strip()
+        if not slug:
+            continue
+
+        # Some API variants may provide a complete URL or route instead.
+        if slug.startswith(("https://", "http://", "/")):
+            normalized = _clean_public_event_url(slug)
+            if normalized:
+                return normalized
+            continue
+
+        slug = slug.split("?", 1)[0].split("#", 1)[0].strip("/")
+        if slug.lower().startswith("radveranstaltung/"):
+            normalized = _clean_public_event_url("/" + slug)
+            if normalized:
+                return normalized
+
+        # Standard ADFC cSlug values begin with the public numeric event number.
+        if re.fullmatch(r"\d+-[A-Za-z0-9-]+", slug):
+            return (
+                "https://touren-termine.adfc.de/radveranstaltung/"
+                + quote(slug, safe="-")
+            )
+
     preferred_url_fields = (
         "eventUrl", "publicUrl", "detailUrl", "permalink", "webUrl",
         "frontendUrl", "linkUrl", "canonicalUrl", "publicLink", "eventLink",
@@ -591,9 +627,9 @@ def normalize_event(item):
         place_raw = find_value(item, ("meetingPoint", "eventLocation", "locationName", "placeName", "address"), max_depth=2)
     place = stringify_place(place_raw)
 
-    description = first_direct(item, ("description", "longDescription", "shortDescription", "teaser", "summary", "text", "abstract"))
+    description = first_direct(item, ("description", "longDescription", "shortDescription", "cShortDescription", "teaser", "summary", "text", "abstract"))
     if description is None:
-        description = find_value(item, ("description", "longDescription", "shortDescription", "teaser", "summary"), max_depth=2)
+        description = find_value(item, ("description", "longDescription", "shortDescription", "cShortDescription", "teaser", "summary"), max_depth=2)
 
     date_text = start.strftime("%Y-%m-%d")
     return {
@@ -693,13 +729,6 @@ def scrape():
             normalized = normalize_event(item)
             if not normalized:
                 continue
-
-            # TEMPORARY DIAGNOSTIC: preserve the original API object for this
-            # one event so we can locate any public numeric ID/slug/link field.
-            if "lokale beteiligung" in normalized.get("title", "").casefold():
-                normalized["_debug_raw_api"] = item
-                print("ADFC DEBUG: Original API object for 'Lokale Beteiligung':")
-                print(json.dumps(item, ensure_ascii=False, indent=2, default=str))
 
             normalized["latitude"] = round(lat, 6)
             normalized["longitude"] = round(lon, 6)

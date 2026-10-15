@@ -13,6 +13,7 @@ OUTPUTS = {
     "fahrradtermine": ROOT / "output" / "fahrradtermine.html",
     "velodemo": ROOT / "output" / "velodemo.html",
     "adfc": ROOT / "output" / "adfc.html",
+    "werkstaetten": ROOT / "output" / "werkstaetten.html",
 }
 BERLIN = ZoneInfo("Europe/Berlin")
 
@@ -43,6 +44,8 @@ def source_kind(event):
     source = str(event.get("source") or "").lower()
     page = str(event.get("page") or "").lower()
     url = str(event.get("url") or "").lower()
+    if "werkstatt" in source or "selbsthilfewerk" in source or "selbsthilfewerk" in page or "selbsthilfewerk" in url:
+        return "werkstaetten"
     if "adfc" in source or "touren-termine.adfc.de" in page or "touren-termine.adfc.de" in url:
         return "adfc"
     if "velodemo" in source or "velodemo.de" in page or "velodemo.de" in url:
@@ -123,7 +126,7 @@ def render(events, kind, output_file):
         )
     )
 
-    label = {"velodemo": "VELODEMO", "adfc": "ADFC", "fahrradtermine": "Gancio"}.get(kind, kind.upper())
+    label = {"velodemo": "VELODEMO", "adfc": "ADFC", "fahrradtermine": "Gancio", "werkstaetten": "Fahrradselbsthilfewerkstätten"}.get(kind, kind.upper())
     blocks = [
         f"<!-- Automatisch aus candidates.json erzeugt: {label}; vor Veröffentlichung prüfen. -->",
         "",
@@ -160,7 +163,7 @@ def render(events, kind, output_file):
         if not note and dt and dt.hour == 0 and dt.minute == 0 and "purple ride" in (event.get("title") or "").lower():
             note = "Uhrzeit im Feed unklar; bitte prüfen."
 
-        if kind == "velodemo":
+        if kind in ("velodemo", "werkstaetten"):
             identifier = (event.get("date") or "") + " " + (event.get("title") or "")
         else:
             identifier = slug_from_url(event.get("url", ""))
@@ -205,7 +208,7 @@ def main():
     if not isinstance(events, list):
         raise SystemExit("candidates.json muss eine JSON-Liste enthalten.")
 
-    grouped = {"fahrradtermine": [], "velodemo": [], "adfc": []}
+    grouped = {"fahrradtermine": [], "velodemo": [], "adfc": [], "werkstaetten": []}
     for event in events:
         if isinstance(event, dict):
             grouped[source_kind(event)].append(event)

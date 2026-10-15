@@ -23,6 +23,7 @@ SEARCH_PAGE = (
     "&latLng=52.517%2C13.3888&place=Berlin"
 )
 LAT_LNG = "52.517,13.3888"
+CENTER_LAT, CENTER_LON = (float(part) for part in LAT_LNG.split(","))
 DISTANCE_KM = 30
 DAYS_AHEAD = 365
 LIMIT = 100
@@ -179,6 +180,119 @@ def extract_item_list(payload):
             except ValueError:
                 continue
     raise ValueError("ADFC-API-Antwort enthält keine erkennbare Veranstaltungsliste. Schlüssel: " + ", ".join(map(str, payload.keys())))
+
+
+def _coordinate_number(value):
+    """Convert a JSON coordinate to a float, rejecting invalid values."""
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        result = float(str(value).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    return result if -180 <= result <= 180 else None
+
+
+def _coordinate_pair_from_dict(obj):
+    """Read latitude and longitude when they are in the same object."""
+    if not isinstance(obj, dict):
+        return None
+    values = {normalize_key(key): value for key, value in obj.items()}
+    lat = lon = None
+    for key in ("latitude", "lat", "gpslatitude", "locationlatitude", "geolatitude"):
+        if key in values:
+            lat = _coordinate_number(values[key])
+            if lat is not None:
+                break
+    for key in ("longitude", "lon", "lng", "long", "gpslongitude", "locationlongitude", "geolongitude"):
+        if key in values:
+            lon = _coordinate_number(values[key])
+            if lon is not None:
+                break
+    if lat is not None and lon is not None and -90 <= lat <= 90:
+        return lat, lon
+    return None
+
+
+def _search_location_coordinates(value, depth=0):
+    """Search a location object, including common nested geo/position shapes."""
+    if depth > 6:
+        return None
+    if isinstance(value, dict):
+        pair = _coordinate_pair_from_dict(value)
+        if pair:
+            return pair
+
+        for key, subvalue in value.items():
+            norm = normalize_key(key)
+            # GeoJSON coordinate arrays are [longitude, latitude].
+            if norm in {"coordinates", "coordinate"} and isinstance(subvalue, (list, tuple)) and len(subvalue) >= 2:
+                lon = _coordinate_number(subvalue[0])
+                lat = _coordinate_number(subvalue[1])
+                if lon is not None and lat is not None and -90 <= lat <= 90:
+                    return lat, lon
+            # A named latLng string conventionally uses latitude, longitude.
+            if norm in {"latlng", "gpscoordinates"} and isinstance(subvalue, str):
+                match = re.search(r"(-?\d{1,2}(?:\.\d+)?)\s*[,; ]\s*(-?\d{1,3}(?:\.\d+)?)", subvalue)
+                if match:
+                    lat, lon = float(match.group(1)), float(match.group(2))
+                    if -90 <= lat <= 90 and -180 <= lon <= 180:
+                        return lat, lon
+
+        # Search geographic containers first; avoid roaming over unrelated event fields.
+        priority = {"geo", "geolocation", "geoposition", "position", "coordinates", "coordinate", "point", "location", "address", "meetingpoint", "startlocation", "venue"}
+        for key, subvalue in sorted(value.items(), key=lambda pair: normalize_key(pair[0]) not in priority):
+            if isinstance(subvalue, (dict, list, tuple)):
+                pair = _search_location_coordinates(subvalue, depth + 1)
+                if pair:
+                    return pair
+    elif isinstance(value, (list, tuple)):
+        for subvalue in value:
+            if isinstance(subvalue, (dict, list, tuple)):
+                pair = _search_location_coordinates(subvalue, depth + 1)
+                if pair:
+                    return pair
+    return None
+
+
+def event_coordinates(item):
+    """Get the event's actual start/meeting point, not the search centre."""
+    if not isinstance(item, dict):
+        return None
+    location_names = {
+        "meetingpoint", "startlocation", "startplace", "startaddress", "place",
+        "eventlocation", "location", "venue", "address", "locationdata",
+        "geolocation", "geoposition", "geo", "position", "point", "coordinates",
+    }
+    fields = [
+        (key, value) for key, value in item.items()
+        if normalize_key(key) in location_names and isinstance(value, (dict, list, tuple))
+    ]
+    priority = ["meetingpoint", "startlocation", "startplace", "startaddress", "place", "eventlocation", "location", "venue", "address", "locationdata", "geolocation", "geoposition", "geo", "position", "point", "coordinates"]
+    for _, value in sorted(fields, key=lambda pair: priority.index(normalize_key(pair[0])) if normalize_key(pair[0]) in priority else len(priority)):
+        pair = _search_location_coordinates(value)
+        if pair:
+            return pair
+
+    # Some API responses put lat/lon directly on the event.
+    pair = _coordinate_pair_from_dict(item)
+    if pair:
+        return pair
+    for key, value in item.items():
+        if normalize_key(key) in {"latlng", "gpscoordinates", "coordinates", "geolocation", "geoposition"}:
+            pair = _search_location_coordinates({key: value})
+            if pair:
+                return pair
+    return None
+
+
+def distance_km(lat1, lon1, lat2, lon2):
+    """Great-circle distance between two points in kilometres."""
+    from math import asin, cos, radians, sin, sqrt
+    lat1, lon1, lat2, lon2 = map(radians, (lat1, lon1, lat2, lon2))
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    return 6371.0088 * 2 * asin(sqrt(min(1.0, a)))
 
 
 def stringify_place(value):
@@ -386,6 +500,8 @@ def scrape():
 
     found = []
     seen_ids = set()
+    outside_radius = 0
+    without_coordinates = 0
     offset = 0
     max_pages = 50
     total_hint = None
@@ -412,9 +528,24 @@ def scrape():
                 continue
             seen_raw_items.add(raw_id)
             raw_new_count += 1
+            # Enforce the requested radius locally. The REST endpoint may ignore
+            # the geographic parameters copied from the frontend search URL.
+            coords = event_coordinates(item)
+            if not coords:
+                without_coordinates += 1
+                continue
+            lat, lon = coords
+            km = distance_km(CENTER_LAT, CENTER_LON, lat, lon)
+            if km > DISTANCE_KM:
+                outside_radius += 1
+                continue
+
             normalized = normalize_event(item)
             if not normalized:
                 continue
+            normalized["latitude"] = round(lat, 6)
+            normalized["longitude"] = round(lon, 6)
+            normalized["distance_km"] = round(km, 1)
             unique_id = normalized.get("adfc_id") or (normalized["date"], normalized["title"], normalized["place"])
             unique_id = str(unique_id)
             if unique_id in seen_ids:
@@ -439,7 +570,9 @@ def scrape():
     OUT.mkdir(parents=True, exist_ok=True)
     output = OUT / "candidates_adfc.json"
     output.write_text(json.dumps(found, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"ADFC: zukünftige Termine: {len(found)}")
+    print(f"ADFC: außerhalb des {DISTANCE_KM}-km-Umkreises verworfen: {outside_radius}")
+    print(f"ADFC: mangels Koordinaten nicht übernommen: {without_coordinates}")
+    print(f"ADFC: zukünftige Termine innerhalb des Umkreises: {len(found)}")
     print(f"ADFC: Termine mit Bild-URL: {sum(bool(event['image']) for event in found)}")
     print(f"ADFC: gespeichert: {output}")
 

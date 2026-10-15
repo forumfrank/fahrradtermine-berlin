@@ -9,7 +9,7 @@ import re
 from calendar import monthrange
 from datetime import date, datetime, time
 from pathlib import Path
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urljoin, urlsplit
 from zoneinfo import ZoneInfo
 
 import requests
@@ -386,58 +386,188 @@ def normalize_tags(item):
 
 
 def slugify(value):
-    value = clean(value).lower().replace("ß", "ss")
-    value = re.sub(r"[^a-z0-9]+", "-", value).strip("-")
+    """Create an ADFC-style URL slug as a fallback after the numeric event ID."""
+    value = clean(value).lower()
+    value = (
+        value.replace("ß", "ss")
+        .replace("ä", "ae")
+        .replace("ö", "oe")
+        .replace("ü", "ue")
+    )
+    # ADFC slugs often remove punctuation inside words (e.g. "MTB-Bergtour"
+    # becomes "mtbbergtour") and use dashes between words.
+    value = re.sub(r"[^a-z0-9\s]", "", value)
+    value = re.sub(r"\s+", "-", value.strip())
     return value[:100].strip("-")
 
 
-def event_url(item, title):
-    """Find the public event URL without mistaking an image object's URL for it."""
-    # Prefer known public-link fields, whether direct or nested.
-    value = first_direct(item, ("eventUrl", "publicUrl", "detailUrl", "permalink", "webUrl", "frontendUrl", "linkUrl", "canonicalUrl"))
-    if value is None:
-        value = find_value(item, ("eventUrl", "publicUrl", "detailUrl", "permalink", "webUrl", "frontendUrl", "linkUrl", "canonicalUrl"), max_depth=3)
-    if value is None:
-        value = first_direct(item, ("url", "link", "href"))
-    if value is None:
-        # Some responses wrap the actual event one level down. Skip image/media objects.
-        def walk_links(obj, depth=0):
-            if depth > 4:
-                return None
-            if isinstance(obj, dict):
-                for key, sub in obj.items():
-                    key_norm = normalize_key(key)
-                    if any(token in key_norm for token in ("image", "picture", "photo", "thumbnail", "banner", "media", "attachment")):
-                        continue
-                    if key_norm in {"url", "href", "link"} and isinstance(sub, str) and sub.strip():
-                        return sub.strip()
-                for key, sub in obj.items():
-                    key_norm = normalize_key(key)
-                    if any(token in key_norm for token in ("image", "picture", "photo", "thumbnail", "banner", "media", "attachment")):
-                        continue
-                    result = walk_links(sub, depth + 1)
-                    if result:
-                        return result
-            elif isinstance(obj, list):
-                for sub in obj:
-                    result = walk_links(sub, depth + 1)
-                    if result:
-                        return result
-            return None
-        value = walk_links(item)
+def _is_search_url(value):
+    """Reject the generic search page even if the API exposes it as a link."""
+    try:
+        parsed = urlsplit(value)
+    except (TypeError, ValueError):
+        return True
+    host = (parsed.netloc or "").lower()
+    path = (parsed.path or "").rstrip("/").lower()
+    return (
+        "api-touren-termine.adfc.de" in host
+        or path in {"/suche", "/search", "/veranstaltungen", "/veranstaltungssuche"}
+        or (path.endswith("/suche") and bool(parsed.query))
+    )
+
+
+def _clean_public_event_url(value):
+    """Normalize a candidate URL and reject search pages and API endpoints."""
     if isinstance(value, dict):
-        value = first_direct(value, ("href", "url", "uri"))
-    if isinstance(value, str) and value.strip():
-        url = value.strip()
-        if url.startswith("/"):
-            url = urljoin("https://touren-termine.adfc.de/", url)
-        if url.startswith(("https://", "http://")) and "api-touren-termine.adfc.de" not in url:
-            return url
-    identifier = first_direct(item, ("id", "eventId", "eventItemId", "publicId", "identifier"))
-    if identifier is None:
-        identifier = find_value(item, ("id", "eventId", "eventItemId", "publicId", "identifier"), max_depth=1)
-    if identifier and str(identifier).isdigit():
-        return f"https://touren-termine.adfc.de/radveranstaltung/{identifier}-{slugify(title)}"
+        value = first_direct(value, ("href", "url", "uri", "path", "permalink"))
+    if not isinstance(value, str) or not value.strip():
+        return None
+    candidate = value.strip()
+    if candidate.startswith("//"):
+        candidate = "https:" + candidate
+    elif candidate.startswith("/"):
+        candidate = urljoin("https://touren-termine.adfc.de/", candidate)
+    elif not candidate.startswith(("https://", "http://")):
+        return None
+    if _is_search_url(candidate):
+        return None
+    if re.search(r"\.(jpe?g|png|gif|webp|svg)(?:\?|$)", candidate, re.I):
+        return None
+    return candidate
+
+
+def _numeric_event_id(item):
+    """Find a numeric event identifier, ignoring IDs belonging to media/people/locations."""
+    id_names = {
+        "id", "eventid", "eventitemid", "publicid", "identifier",
+        "internalid", "eventnumber", "eventitemnumber", "publicnumber",
+    }
+    skip_parts = (
+        "image", "picture", "photo", "thumbnail", "banner", "media",
+        "attachment", "organizer", "organisation", "organization", "contact",
+        "author", "location", "address", "venue", "meetingpoint", "startlocation",
+        "registration", "participant", "unit", "association",
+    )
+    found = []
+
+    def walk(obj, depth=0, skip=False):
+        if depth > 6 or skip:
+            return
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                norm = normalize_key(key)
+                if any(part in norm for part in skip_parts):
+                    continue
+                if norm in id_names and value not in (None, "", [], {}):
+                    found.append((norm, value))
+                if isinstance(value, (dict, list, tuple)):
+                    walk(value, depth + 1)
+        elif isinstance(obj, (list, tuple)):
+            for value in obj:
+                if isinstance(value, (dict, list, tuple)):
+                    walk(value, depth + 1)
+
+    # Prefer event-specific identifiers at the top level, then in the event data.
+    preferred = ("eventitemid", "eventid", "publicid", "id", "identifier", "internalid", "eventnumber", "eventitemnumber", "publicnumber")
+    if isinstance(item, dict):
+        top_values = {normalize_key(k): v for k, v in item.items()}
+        for name in preferred:
+            candidate = top_values.get(name)
+            if candidate is not None and re.fullmatch(r"\d+", str(candidate).strip()):
+                return str(candidate).strip()
+    walk(item)
+    for name in preferred:
+        for key, value in found:
+            if key == name and re.fullmatch(r"\d+", str(value).strip()):
+                return str(value).strip()
+    return None
+
+
+def event_url(item, title):
+    """Return the specific public detail page, never the generic search URL when avoidable."""
+    preferred_url_fields = (
+        "eventUrl", "publicUrl", "detailUrl", "permalink", "webUrl",
+        "frontendUrl", "linkUrl", "canonicalUrl", "publicLink", "eventLink",
+        "detailLink", "canonicalPath", "eventPath", "frontendPath", "route",
+    )
+
+    # Known event-detail fields have priority over generic URLs.
+    for field in preferred_url_fields:
+        value = first_direct(item, (field,))
+        normalized = _clean_public_event_url(value)
+        if normalized:
+            return normalized
+    for field in preferred_url_fields:
+        value = find_value(item, (field,), max_depth=4)
+        normalized = _clean_public_event_url(value)
+        if normalized:
+            return normalized
+
+    # Some feeds put the URL under generic `url` / `link` / `href` keys.
+    # Ignore a generic link that points back to the search results.
+    for field in ("url", "link", "href"):
+        value = first_direct(item, (field,))
+        normalized = _clean_public_event_url(value)
+        if normalized:
+            return normalized
+
+    def walk_links(obj, depth=0):
+        if depth > 6:
+            return None
+        if isinstance(obj, dict):
+            for key, sub in obj.items():
+                key_norm = normalize_key(key)
+                if any(token in key_norm for token in (
+                    "image", "picture", "photo", "thumbnail", "banner", "media",
+                    "attachment", "organizer", "organisation", "organization",
+                )):
+                    continue
+                if key_norm in {"url", "href", "link", "uri", "permalink", "path"}:
+                    candidate = _clean_public_event_url(sub)
+                    if candidate:
+                        return candidate
+            for key, sub in obj.items():
+                key_norm = normalize_key(key)
+                if any(token in key_norm for token in (
+                    "image", "picture", "photo", "thumbnail", "banner", "media",
+                    "attachment", "organizer", "organisation", "organization",
+                )):
+                    continue
+                result = walk_links(sub, depth + 1)
+                if result:
+                    return result
+        elif isinstance(obj, (list, tuple)):
+            for sub in obj:
+                result = walk_links(sub, depth + 1)
+                if result:
+                    return result
+        return None
+
+    candidate = walk_links(item)
+    if candidate:
+        return candidate
+
+    # The public ADFC detail route uses a numeric event ID plus a title slug.
+    identifier = _numeric_event_id(item)
+    if identifier:
+        explicit_slug = find_value(
+            item,
+            ("eventSlug", "urlSlug", "slug", "seoSlug", "slugName", "permalinkSlug"),
+            max_depth=4,
+        )
+        slug = clean(explicit_slug).strip("/ ") if isinstance(explicit_slug, str) else ""
+        # Some APIs expose a complete route/path in the slug field.
+        if slug.startswith(("http://", "https://", "/")):
+            normalized = _clean_public_event_url(slug)
+            if normalized:
+                return normalized
+        slug = slug.split("?")[0].split("#")[0].strip("/")
+        if not slug or re.fullmatch(r"\d+", slug):
+            slug = slugify(title)
+        if slug:
+            return f"https://touren-termine.adfc.de/radveranstaltung/{identifier}-{slug}"
+
+    # Last resort only: callers will log these, so missing detail URLs are visible.
     return SEARCH_PAGE
 
 
@@ -595,6 +725,8 @@ def scrape():
     print(f"ADFC: mangels Koordinaten nicht übernommen: {without_coordinates}")
     print(f"ADFC: zukünftige Termine innerhalb des Umkreises: {len(found)}")
     print(f"ADFC: Termine mit Bild-URL: {sum(bool(event['image']) for event in found)}")
+    no_detail_url = sum(event.get("url") == SEARCH_PAGE for event in found)
+    print(f"ADFC: ohne erkannten Detail-Link (nur Suchseite als Ersatz): {no_detail_url}")
     print(f"ADFC: gespeichert: {output}")
 
 

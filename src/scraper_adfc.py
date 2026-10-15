@@ -693,6 +693,14 @@ def scrape():
             normalized = normalize_event(item)
             if not normalized:
                 continue
+
+            # TEMPORARY DIAGNOSTIC: preserve the original API object for this
+            # one event so we can locate any public numeric ID/slug/link field.
+            if "lokale beteiligung" in normalized.get("title", "").casefold():
+                normalized["_debug_raw_api"] = item
+                print("ADFC DEBUG: Original API object for 'Lokale Beteiligung':")
+                print(json.dumps(item, ensure_ascii=False, indent=2, default=str))
+
             normalized["latitude"] = round(lat, 6)
             normalized["longitude"] = round(lon, 6)
             normalized["distance_km"] = round(km, 1)

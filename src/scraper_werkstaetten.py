@@ -24,14 +24,17 @@ FIELDS = {
     "image": {"bild", "plakat", "image", "foto", "bildurl"},
     "opening": {"offn", "oeffn", "offnung", "oeffnung", "offnungszeiten", "oeffnungszeiten", "zeiten"},
     "access": {"zugangsbesonderheiten", "zugang", "zugangbeson", "besonderheiten", "barrierefreiheit"},
-    "address": {"adrurlkont", "adrurlkontakt", "adresse", "ort", "kontakt"},
+    # AdrURLKont is the former combined field; Adresse/Kontakt are the newer split fields.
+    "address": {"adrurlkont", "adrurlkontakt", "adresse", "ort"},
+    "contact": {"kontakt", "website", "url", "quelle"},
 }
 LABELS = {
     "title": r"Titel|Title|Werkstatt(?:sname)?|Name",
     "image": r"Bild|Plakat|Image|Foto",
     "opening": r"Öffn(?:zeiten)?|Oeffn(?:zeiten)?|Öffnungszeiten|Oeffnungszeiten|Zeiten",
     "access": r"Zugangsbesonderheiten|Zugang|Besonderheiten|Barrierefreiheit",
-    "address": r"AdrURLKont|AdrURLKontakt|Adresse|Ort|Kontakt",
+    "address": r"AdrURLKont|AdrURLKontakt|Adresse|Ort",
+    "contact": r"Kontakt|Website|URL|Quelle",
 }
 
 
@@ -55,7 +58,10 @@ def text_of(value):
     text = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r"\1 (\2)", text)
     text = re.sub(r"<((?:https?://|mailto:)[^>]+)>", r"\1", text)
     text = re.sub(r"`([^`]+)`", r"\1", text)
-    text = BeautifulSoup(text, "html.parser").get_text(" ", strip=True)
+    # Only parse as HTML if there are actual tags; this also avoids a harmless
+    # BeautifulSoup warning when the text happens to be a bare URL.
+    if re.search(r"<[A-Za-z!/][^>]*>", text):
+        text = BeautifulSoup(text, "html.parser").get_text(" ", strip=True)
     text = html.unescape(text)
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"\*\*(.*?)\*\*|__(.*?)__", lambda m: m.group(1) or m.group(2), text)
@@ -158,6 +164,17 @@ def has_explicit_anchor(node):
     return False
 
 
+def combine_address_contact(address, contact):
+    """Support both the old combined AdrURLKont field and split fields."""
+    address = text_of(address)
+    contact = text_of(contact)
+    if not address:
+        return contact
+    if not contact or contact.casefold() in address.casefold():
+        return address
+    return f"{address} · {contact}"
+
+
 def event_for(title, image, opening, access, address, anchor, description=""):
     title, opening, address = title_text(title), text_of(opening), text_of(address)
     access = text_of(access)
@@ -205,16 +222,17 @@ def parse_class_cards(soup):
             for desc in [node] + node.find_all(True):
                 labels = list(desc.get("class") or []) + ([desc.get("id")] if desc.get("id") else [])
                 if any(field_key(label) == kind for label in labels if label):
-                    vals[kind] = get_img("", desc) if kind == "image" else field_text(desc, keep_links=(kind == "address"))
+                    vals[kind] = get_img("", desc) if kind == "image" else field_text(desc, keep_links=(kind in ("address", "contact")))
                     if vals[kind]:
                         break
         if not vals.get("title"):
             h = node.find(["h1", "h2", "h3", "h4"])
             vals["title"] = text_of(h.get_text(" ", strip=True)) if h else ""
         anchor = anchor_for(node, vals.get("title", ""))
+        combined_address = combine_address_contact(vals.get("address"), vals.get("contact"))
         ev = event_for(
             vals.get("title"), vals.get("image") or get_img("", node),
-            vals.get("opening"), vals.get("access"), vals.get("address"),
+            vals.get("opening"), vals.get("access"), combined_address,
             anchor,
         )
         if ev:
@@ -236,10 +254,15 @@ def parse_html_tables(soup):
             cells = row.find_all(["td", "th"], recursive=False)
             vals = {headers[i]: cells[i] for i in range(min(len(headers), len(cells))) if headers[i]}
             def val(key):
-                return text_of(vals[key].get_text(" ", strip=True)) if key in vals else ""
+                if key not in vals:
+                    return ""
+                if key in ("address", "contact"):
+                    return field_text(vals[key], keep_links=True)
+                return text_of(vals[key].get_text(" ", strip=True))
             title = val("title")
             image = get_img("", vals.get("image")) if vals.get("image") else ""
-            ev = event_for(title, image, val("opening"), val("access"), val("address"), anchor_for(row, title))
+            address = combine_address_contact(val("address"), val("contact"))
+            ev = event_for(title, image, val("opening"), val("access"), address, anchor_for(row, title))
             if ev:
                 found.append(ev)
     return found
@@ -270,7 +293,8 @@ def parse_markdown_tables(raw):
             vals = {key: cells[pos] if pos < len(cells) else "" for key, pos in idx.items()}
             title = title_text(vals.get("title"))
             image = get_img(vals.get("image", ""))
-            ev = event_for(title, image, vals.get("opening"), vals.get("access"), vals.get("address"), slugify(title))
+            address = combine_address_contact(vals.get("address"), vals.get("contact"))
+            ev = event_for(title, image, vals.get("opening"), vals.get("access"), address, slugify(title))
             if ev:
                 found.append(ev)
             i += 1
@@ -300,7 +324,8 @@ def parse_heading_sections(raw):
         if not vals.get("opening") or not vals.get("address"):
             continue
         title = vals.get("title") or sec["title"]
-        ev = event_for(title, get_img(vals.get("image", "")) or get_img(raw_section), vals["opening"], vals.get("access", ""), vals["address"], slugify(sec["title"]), raw_section)
+        address = combine_address_contact(vals.get("address"), vals.get("contact"))
+        ev = event_for(title, get_img(vals.get("image", "")) or get_img(raw_section), vals["opening"], vals.get("access", ""), address, slugify(sec["title"]), raw_section)
         if ev:
             found.append(ev)
     return found
@@ -344,6 +369,7 @@ def main():
     print(f"Werkstätten: Parserformat = {mode}")
     print(f"Werkstätten: Einträge erkannt = {len(found)}")
     print(f"Werkstätten: Einträge mit Bild = {sum(bool(e['image']) for e in found)}")
+    print(f"Werkstätten: Einträge mit Zeitfeld = {sum(bool(e['display_time']) for e in found)}")
     print(f"Werkstätten: mit vorhandener Sprungmarke = {sum(bool(e.get('anchor_verified')) for e in found)}")
     print(f"Werkstätten: Sprungmarke muss ggf. in der Quelle ergänzt werden = {sum(not e.get('anchor_verified') for e in found)}")
     print(f"Gespeichert: {output}")

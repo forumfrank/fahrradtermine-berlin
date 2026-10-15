@@ -232,59 +232,112 @@ def parse_velodemo_date(text):
 
 
 def scan_velodemo(source):
-    response = requests.get(
-        source["url"], headers=HEADERS, timeout=30
-    )
+    """Scrape VELODEMO events; pair poster images with the date heading below them."""
+    response = requests.get(source["url"], headers=HEADERS, timeout=30)
     response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
+    # Parse bytes so BeautifulSoup can honor the page's declared text encoding.
+    soup = BeautifulSoup(response.content, "html.parser")
+
+    dated_headings = []
+    for heading in soup.find_all(["h2", "h3"]):
+        event_date = parse_velodemo_date(heading.get_text(" ", strip=True))
+        if event_date:
+            dated_headings.append((heading, event_date))
+
+    def image_url_from_tag(img):
+        src = (
+            img.get("data-src")
+            or img.get("data-lazy-src")
+            or img.get("data-original")
+            or img.get("src")
+            or ""
+        ).strip()
+        if (not src or src.startswith("data:")) and img.get("srcset"):
+            candidates = [
+                item.strip().split()[0]
+                for item in img.get("srcset", "").split(",")
+                if item.strip()
+            ]
+            if candidates:
+                src = candidates[-1]
+        if not src or src.startswith("data:"):
+            return ""
+        return urljoin(source["url"], src)
+
+    def image_date_matches(image_url, event_date):
+        # Filenames such as 26-10-31_kidicalmass.jpg can validate the association.
+        filename = image_url.split("?", 1)[0].rsplit("/", 1)[-1]
+        match = re.search(
+            r"(?<!\d)(?P<year>20\d{2}|\d{2})[-_](?P<month>\d{1,2})[-_](?P<day>\d{1,2})(?!\d)",
+            filename,
+        )
+        if not match:
+            return True  # No date in the filename, so use the page's structure.
+        year = int(match.group("year"))
+        if year < 100:
+            year += 2000
+        try:
+            filename_date = (year, int(match.group("month")), int(match.group("day")))
+        except ValueError:
+            return False
+        return filename_date == (event_date.year, event_date.month, event_date.day)
 
     now = datetime.now(BERLIN)
     found = []
 
-    for heading in soup.find_all(["h2", "h3"]):
-        event_date = parse_velodemo_date(
-            heading.get_text(" ", strip=True)
-        )
-        if not event_date:
-            continue
-
-        # Die Inhalte bis zur nächsten datierten Überschrift sammeln.
+    for heading_index, (heading, event_date) in enumerate(dated_headings):
+        # Text and links belong to the event after this heading. Stop at the next
+        # heading. Images are intentionally NOT taken from this section because
+        # VELODEMO places a poster before its event's date heading.
         nodes = []
         for node in heading.next_siblings:
-            if (
-                getattr(node, "name", None) in ("h2", "h3")
-                and parse_velodemo_date(node.get_text(" ", strip=True))
-            ):
+            if getattr(node, "name", None) in ("h1", "h2", "h3", "h4"):
                 break
             if getattr(node, "name", None):
                 nodes.append(node)
 
-        lines = []
-        images = []
-        links = []
+        # Find the nearest preceding poster, without crossing the previous heading.
+        image_url = ""
+        for previous in heading.previous_siblings:
+            if getattr(previous, "name", None) in ("h1", "h2", "h3", "h4"):
+                break
+            imgs = []
+            if getattr(previous, "name", None) == "img":
+                imgs = [previous]
+            elif getattr(previous, "find_all", None):
+                imgs = previous.find_all("img")
+            found_nearest_image = False
+            for img in reversed(imgs):
+                candidate = image_url_from_tag(img)
+                if not candidate:
+                    continue
+                found_nearest_image = True
+                # If the filename contains a different date, leave the poster
+                # blank rather than accidentally reusing an older event's image.
+                if image_date_matches(candidate, event_date):
+                    image_url = candidate
+                break
+            if found_nearest_image:
+                break
 
+        lines = []
+        links = []
         for node in nodes:
+            if node.name in ("script", "style", "noscript"):
+                continue
             text = node.get_text(" ", strip=True)
             if text:
-                lines.append(text)
-
-            if getattr(node, "name", None) == "img":
-                images.append(node)
-            images.extend(node.find_all("img"))
-
-            if getattr(node, "name", None) == "a":
+                lines.append(" ".join(text.split()))
+            if node.name == "a":
                 links.append(node)
             links.extend(node.find_all("a"))
 
-        # Startzeit und Ort aus Zeilen wie:
-        # "Start: 17:00 Uhr, Torstraße / Tucholskystraße"
+        # A start time can appear at the end of the event description line.
         start_match = None
         place = ""
         for line in lines:
             match = re.search(
-                r"\bStart\s*:?\s*(?:um\s*)?"
-                r"(\d{1,2})(?:[:.](\d{2}))?"
-                r"\s*(?:Uhr)?\s*[,–-]?\s*(.*)",
+                r"\bStart\s*:?\s*(?:um\s*)?(\d{1,2})(?:[:.](\d{2}))?\s*(?:Uhr)?\s*[,–-]?\s*(.*)",
                 line,
                 re.IGNORECASE,
             )
@@ -295,51 +348,36 @@ def scan_velodemo(source):
 
         time_unknown = start_match is None
         hour = int(start_match.group(1)) if start_match else 12
-        minute = (
-            int(start_match.group(2) or 0)
-            if start_match else 0
-        )
-
+        minute = int(start_match.group(2) or 0) if start_match else 0
         start = event_date.replace(hour=hour, minute=minute)
-        if start <= now:
+        if (not time_unknown and start <= now) or (time_unknown and event_date.date() < now.date()):
             continue
 
-        title_candidates = [
-            line for line in lines
-            if not re.search(
-                r"^(Start|Beginn|Treffen|Zubringer|Ziel)\s*:?",
+        title_candidates = []
+        for line in lines:
+            cleaned = re.sub(
+                r"\b(?:Start|Zubringer|Ziel)\s*:?.*$",
+                "",
                 line,
-                re.IGNORECASE,
-            )
-        ]
-        title = (
-            title_candidates[0]
-            if title_candidates
-            else f"Fahrraddemo am {event_date:%d.%m.%Y}"
-        )
+                flags=re.IGNORECASE,
+            ).strip(" ,–-\t")
+            if cleaned and not re.match(
+                r"^(Treffen|Start|Zubringer|Ziel)\b", cleaned, re.IGNORECASE
+            ):
+                title_candidates.append(cleaned)
+        title = title_candidates[0] if title_candidates else f"Fahrraddemo am {event_date:%d.%m.%Y}"
 
-        image_url = ""
-        for img in images:
-            src = (
-                img.get("src")
-                or img.get("data-src")
-                or img.get("data-lazy-src")
-                or ""
-            ).strip()
-            if src and not src.startswith("data:"):
-                image_url = urljoin(source["url"], src)
-                break
-
+        # Prefer a specific event link if present; otherwise link to the source page.
         event_url = source["url"]
         for link in links:
             href = (link.get("href") or "").strip()
             label = link.get_text(" ", strip=True)
-            if not href or not label or href.startswith("mailto:"):
+            if not href or not label or href.startswith(("mailto:", "#", "javascript:")):
                 continue
             candidate = urljoin(source["url"], href)
-            if candidate.rstrip("/") == source["url"].rstrip("/"):
+            if "velodemo.de" in candidate.lower() and candidate.rstrip("/") == source["url"].rstrip("/"):
                 continue
-            if re.search(r"\.(jpe?g|png|gif|webp|svg)(?:\?|$)", candidate, re.I):
+            if re.search(r"\.(jpe?g|png|gif|webp|svg)(?:\?|$)", candidate, re.IGNORECASE):
                 continue
             event_url = candidate
             break
@@ -347,7 +385,7 @@ def scan_velodemo(source):
         found.append({
             "source": source.get("name", "VELODEMO"),
             "page": source["url"],
-            "title": title,
+            "title": clean_html(title),
             "url": event_url,
             "date": start.strftime("%Y-%m-%d"),
             "start_time": start.isoformat(),
@@ -357,20 +395,34 @@ def scan_velodemo(source):
                 else start.strftime("%d.%m.%Y") + " – Uhrzeit offen"
             ),
             "end_time": None,
-            "place": place,
-            "address": place,
-            "description": " ".join(lines),
+            "place": clean_html(place),
+            "address": clean_html(place),
+            "description": clean_html(" ".join(lines)),
             "tags": ["Fahrraddemo"],
             "image": image_url,
             "status": "needs_review",
             "time_unknown": time_unknown,
         })
 
-    found.sort(key=lambda item: item["start_time"])
-    print("VELODEMO: zukünftige Termine:", len(found))
-    print("VELODEMO: Termine mit Plakat:",
-          sum(bool(item["image"]) for item in found))
-    return found
+    # Drop duplicates from the same VELODEMO page (e.g. repeated date headings).
+    unique = []
+    seen = set()
+    for event in found:
+        key = (
+            event.get("date", ""),
+            re.sub(r"\s+", " ", event.get("title", "")).strip().casefold(),
+            re.sub(r"\s+", " ", event.get("place", "")).strip().casefold(),
+        )
+        if key not in seen:
+            seen.add(key)
+            unique.append(event)
+
+    unique.sort(key=lambda item: item["start_time"])
+    print("VELODEMO: Datumsüberschriften gefunden:", len(dated_headings))
+    print("VELODEMO: zukünftige Termine:", len(unique))
+    print("VELODEMO: Termine mit passend zugeordnetem Plakat:", sum(bool(item["image"]) for item in unique))
+    return unique
+
 
 
 

@@ -12,6 +12,7 @@ INPUT = ROOT / "output" / "candidates.json"
 OUTPUTS = {
     "fahrradtermine": ROOT / "output" / "fahrradtermine.html",
     "velodemo": ROOT / "output" / "velodemo.html",
+    "adfc": ROOT / "output" / "adfc.html",
 }
 BERLIN = ZoneInfo("Europe/Berlin")
 
@@ -42,6 +43,8 @@ def source_kind(event):
     source = str(event.get("source") or "").lower()
     page = str(event.get("page") or "").lower()
     url = str(event.get("url") or "").lower()
+    if "adfc" in source or "touren-termine.adfc.de" in page or "touren-termine.adfc.de" in url:
+        return "adfc"
     if "velodemo" in source or "velodemo.de" in page or "velodemo.de" in url:
         return "velodemo"
     return "fahrradtermine"
@@ -120,7 +123,7 @@ def render(events, kind, output_file):
         )
     )
 
-    label = "VELODEMO" if kind == "velodemo" else "Gancio"
+    label = {"velodemo": "VELODEMO", "adfc": "ADFC", "fahrradtermine": "Gancio"}.get(kind, kind.upper())
     blocks = [
         f"<!-- Automatisch aus candidates.json erzeugt: {label}; vor Veröffentlichung prüfen. -->",
         "",
@@ -202,7 +205,7 @@ def main():
     if not isinstance(events, list):
         raise SystemExit("candidates.json muss eine JSON-Liste enthalten.")
 
-    grouped = {"fahrradtermine": [], "velodemo": []}
+    grouped = {"fahrradtermine": [], "velodemo": [], "adfc": []}
     for event in events:
         if isinstance(event, dict):
             grouped[source_kind(event)].append(event)

@@ -4,6 +4,7 @@ import html
 import json
 import re
 from pathlib import Path
+from datetime import date
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,8 +19,9 @@ CSS = r"""
 }
 	.Titel {font-weight: bold
 }
-	.Rahmen {border: 4px solid #999;
-}
+	.Rahmen {border: none; margin: 0; padding: 0; }
+	.KW {font-weight: bold; margin: 1em 0; }
+	hr {border: 0; border-top: 1px solid #999; margin: 1em 0; }
 </style>
 """
 
@@ -41,9 +43,20 @@ def render_event(item):
     anchor = re.sub(r"[^A-Za-z0-9_-]+", "-", str(item.get("occurrence_id") or item.get("anchor") or title)).strip("-") or "werkstatt"
     image = safe_http_url(item.get("image") or item.get("image_url"))
     date_value = str(item.get("date") or "").strip()
-    opening = str(item.get("display_time") or item.get("opening_hours") or "Termin noch nicht automatisch ermittelt").strip()
     start_time = str(item.get("start_time") or "").strip()
     end_time = str(item.get("end_time") or "").strip()
+    opening = ""
+    if date_value:
+        try:
+            event_date = date.fromisoformat(date_value)
+            weekday = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")[event_date.weekday()]
+            opening = f"{weekday}, {event_date.day}.{event_date.month:02d}."
+            if start_time and end_time:
+                opening += f",  {start_time} - {end_time}"
+        except ValueError:
+            opening = str(item.get("display_time") or "Termin noch nicht automatisch ermittelt").strip()
+    else:
+        opening = str(item.get("display_time") or item.get("opening_hours") or "Termin noch nicht automatisch ermittelt").strip()
     address = str(item.get("address") or item.get("place") or "").strip()
     access = str(item.get("access_notes") or "").strip()
     url = safe_http_url(item.get("url") or item.get("page"))
@@ -79,8 +92,16 @@ def main():
     for item in dated:
         key = (item.get("iso_year"), item.get("iso_week"))
         if key != current_week:
-            blocks.append(f'<div class="KW">Kalenderwoche {int(key[1]):02d} / {int(key[0])}</div>')
+            if current_week is not None and blocks:
+                blocks.append('<hr>')
+            year, week = int(key[0]), int(key[1])
+            monday = date.fromisocalendar(year, week, 1)
+            sunday = date.fromisocalendar(year, week, 7)
+            week_range = f"{monday.day}.{monday.month:02d}. - {sunday.day}.{sunday.month:02d}."
+            blocks.append(f'# KW {week:02d} / {week_range}')
             current_week = key
+        elif blocks and not blocks[-1].startswith('# KW'):
+            blocks.append('<hr>')
         blocks.append(render_event(item))
     if undated:
         blocks.append('<h2>Nicht automatisch terminierbare Werkstätten</h2>')

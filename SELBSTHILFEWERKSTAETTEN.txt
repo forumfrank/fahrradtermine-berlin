@@ -421,7 +421,7 @@ src="https://www.openstreetmap.org/export/embed.html?bbox=13.43224%2C52.47823%2C
 <div class="Rahmen" id="kiezklub-alte-schule">
 <div class="Foto"><img src="https://i.imgur.com/yGUYlus.png"></div>
 <div class="einNam">Kiezklub Alte Schule</div>
-<div class="Öffn">Do 16:00h-18:00; REGEL=1.MO_MONAT</div>
+<div class="Öffn">Do 16:00-18:00; REGEL=1.DO_MONAT</div>
 <div class="ZugangBeson"></div>
 	<div class="Adresse">Dörpfeldstraße 54/56, 
 12489 Berlin</div>

@@ -41,6 +41,11 @@ jobs:
       - name: Getrennte HedgeDoc-HTML-Dateien erzeugen
         run: python src/to_html.py
 
+      # Im Workflow NACH "Getrennte HedgeDoc-HTML-Dateien erzeugen" einfügen:
+      - name: Versammlungsbehörde scrapen
+        run: python src/scraper_versammlungsbehoerde.py
+
+
       # In .github/workflows/scrape.yml direkt NACH dem Schritt einfügen,
       # der alle normalen Event-HTML-Dateien mit src/to_html.py erzeugt.
       # Wichtig: Dieser Schritt muss nach dem allgemeinen HTML-Konverter kommen,
@@ -59,9 +64,14 @@ jobs:
             output/candidates_adfc.json
             output/candidates_werkstaetten.json
             output/candidates.json
+            output/candidates_versammlungsbehoerde.json
+
             output/fahrradtermine.html
             output/velodemo.html
             output/adfc.html
             output/werkstaetten.html
+            output/versammlungsbehoerde.html
+
+            
           if-no-files-found: error
           retention-days: 14

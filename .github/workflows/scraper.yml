@@ -23,10 +23,19 @@ jobs:
       - name: Abhängigkeiten installieren
         run: pip install -r requirements.txt
 
-      - name: Termine scrapen
-        run: python src/scraper.py
+      - name: Fahrradtermine Berlin / Gancio scrapen
+        run: python src/scraper_gancio.py
 
-      - name: HedgeDoc-HTML erzeugen
+      - name: VELODEMO scrapen
+        run: python src/scraper_velodemo.py
+
+      - name: ADFC-Veranstaltungen scrapen
+        run: python src/scraper_adfc.py
+
+      - name: Quelldateien zusammenführen
+        run: python src/merge_candidates.py
+
+      - name: Getrennte HedgeDoc-HTML-Dateien erzeugen
         run: python src/to_html.py
 
       - name: JSON und HTML als Artefakte bereitstellen
@@ -34,8 +43,12 @@ jobs:
         with:
           name: fahrradtermine-json-und-html
           path: |
+            output/candidates_gancio.json
+            output/candidates_velodemo.json
+            output/candidates_adfc.json
             output/candidates.json
             output/fahrradtermine.html
             output/velodemo.html
+            output/adfc.html
           if-no-files-found: error
           retention-days: 14

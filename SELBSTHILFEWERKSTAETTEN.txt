@@ -1,0 +1,450 @@
+<style>
+.scrolltext {
+  white-space: nowrap;
+  overflow: hidden;
+  box-sizing: border-box;
+  animation: scroll-left 10s linear infinite;
+}
+@keyframes scroll-left {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+</style>
+
+
+
+<div class="scrolltext">
+Die Seite ist in Bearbeitung.<br/> 
+Letzte Änderung war 27.3.26
+</div>
+
+
+# Fahrradselbsthilfewerkstätten in Berlin
+
+
+<!-- titel 
+<div class="Rahmen">
+<div class="Foto"></div>
+<div class="einNam"></div>
+<div class="Öffn"></div>
+<div class="ZugangBeson"></div>
+<div class="Adresse"></div>
+<div class="Kontakt"></div>
+<div class="geodat"></div>
+<div class="BewDat"></div>
+</div>
+-->
+
+<style>
+	.Rahmen {
+		border: 4px solid #999;
+	}
+
+.Foto img {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 10px;
+}
+
+.einNam {
+  font-size: 20px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.Adresse {
+  border: 1px solid #999;
+  padding: 5px;
+  margin-top: 5px;
+  width: fit-content;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+}
+
+.Kontakt {
+  border: 1px solid #999;
+  padding: 5px;
+  margin-top: 5px;
+  width: fit-content;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+}
+
+.geodat {
+  border: none;
+  overflow: hidden;  
+  width: 100%;
+  height: 250px;  
+  max-width: 250px
+}
+    
+	.Bezirk {
+font-size: 25px;
+  font-weight: bold;
+  margin-top: 10px;
+	}
+
+.scrolltext {
+  white-space: nowrap;
+  overflow: hidden;
+  box-sizing: border-box;
+  animation: scroll-left 10s linear infinite;
+}
+@keyframes scroll-left {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+</style>
+
+
+
+## Kreuzberg
+
+---
+
+<!--regenbogenfabrik-->
+<div class="Rahmen" id="regenbogenfabrik">
+<div class="Foto"><img src="https://regenbogenfabrik.de/wp-content/uploads/2023/04/fahrrad-1024x683.webp"></div>
+<div class="einNam">Selbsthilfewerkstatt der Regenbogenfabrik</div>
+<div class="Öffn">Di+Mi+Do+Fr 13:00-19:00</div>
+<div class="ZugangBeson">Werkzeug auch für neuere Fahrradkomponenten, Gebrauchtteile</div>
+<div class="Adresse">Lausitzer Str. 21a, 10999 Berlin</div>
+<div class="Kontakt">Telefon direkt in die Werkstatt: (030) 695 795–15<br/> mail:fahrrad@regenbogenfabrik.de<br/>
+<a href="https://regenbogenfabrik.de/fahrrad/">https://regenbogenfabrik.de/fahrrad/</a></div>
+<div class="BewDat"></div>
+<div style="display: block;">
+<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.4240600%2C52.4939800%2C13.4280600%2C52.4979800&layer=mapnik&marker=52.4959800%2C13.4260600"></iframe>
+</div>
+</div>
+
+
+---
+
+<!--adfc-->
+<div class="Rahmen" id="ADFC">
+<div class="Foto"><img src="https://berlin.adfc.de/fileadmin/Gliederungen/Pedale/berlin/_processed_/4/6/csm_SHW-Werkzeugwand-2024_Karl_Gruenberg__16__2c6e144d30.jpg"></div>
+<div class="einNam">Fahrrad-Selbsthilfe-Werkstatt des ADFC Berlin</div>
+<div class="Öffn">Mo 18:00-20:00, Mi+Fr 17:00-20:00</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Möckernstraße 47, 10963 Berlin</div>
+<div class="Kontakt"><a href="https://berlin.adfc.de/artikel/die-fahrrad-selbsthilfe-werkstatt-shw-des-adfc-berlin">
+https://berlin.adfc.de/artikel/die-fahrrad-selbsthilfe-werkstatt-shw-des-adfc-berlin</a></div>
+
+<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.3775000%2C52.4914000%2C13.3815000%2C52.4954000&layer=mapnik&marker=52.4934000%2C13.3795000"></iframe>
+
+<div class="BewDat"></div>
+</div>
+
+---
+<!--velo-fit -->
+<div class="Rahmen" id="velofit">
+<div class="Foto">
+<img src="https://www.remap-berlin.de/bilder/f3f82e86-a6cb-4466-ba4b-6f804bc420f2.jpeg"></div>
+<div class="einNam">Velo-fit</div>
+<div class="Öffn">--</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Zossener Str. 5, 10961 Berlin</div>
+<div class="Kontakt"><a href="https://www.remap-berlin.de/projekte/805">https://www.remap-berlin.de/projekte/805</a></div>
+<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.3927614%2C52.4916200%2C13.3967614%2C52.4956200&layer=mapnik&marker=52.4936200%2C13.3947614"></iframe>
+<div class="BewDat"></div>
+</div>
+
+---
+
+<!-- Gangway e.V. -->
+<div class="Rahmen" id="gangway">
+<div class="Foto"><img src="https://gangway.de/wp-content/uploads/2020/09/CoLab-Eingang-1024x768.jpg"></div>
+<div class="einNam">Gangway e.V.</div>
+<div class="Öffn">Do 16:00–18:00; SAISON=4-10</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Am Pamukkale-Brunnen im Görlitzer Park</div>
+<div class="Kontakt"><a href="https://gangway.de/teams/colab-goerli/">
+https://gangway.de/teams/colab-goerli/
+</a></div>
+
+<div style="display: block;">
+<iframe class="geodat"
+src="https://www.openstreetmap.org/export/embed.html?bbox=13.4333%2C52.4976%2C13.4373%2C52.5016&layer=mapnik&marker=52.4996%2C13.4353">
+</iframe>
+</div>
+
+<div class="BewDat"></div>
+</div>
+
+---
+<!-- Das soziale Rad Gitschiner -->
+<div class="Rahmen" id="gitschiner">
+<div class="Foto"><img src="https://i.postimg.cc/4ys8LZLs/fahradwerkstatt.jpg"></div>
+<div class="einNam">Das soziale Rad</div>
+<div class="Öffn">Mo+Di+Mi+Do+Fr 10:00-14:00</div>
+<div class="ZugangBeson">Zurzeit ist die Werkstatt nicht regelmäßig besetzt, Anleiter helfen aber nach Vereinbarung.</div>
+<div class="Adresse">Gitschiner Str. 15, 10969 Berlin</div>
+<div class="Kontakt"><a href="http://www.gitschiner15.de/pages/angebote/rundgang--fotos/fahrradwerkstatt.php">
+http://www.gitschiner15.de/pages/angebote/rundgang--fotos/fahrradwerkstatt.php
+</a></div>
+
+<div style="display: block;">
+<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.3986000%2C52.4961600%2C13.4026000%2C52.5001600&layer=mapnik&marker=52.4981600%2C13.4006000"></iframe>
+</div>
+
+<div class="BewDat"></div>
+</div>
+
+
+## Charlottenburg
+    
+---
+<!--unirad -->
+<div class="Rahmen" id="unirad">
+<div class="Foto"><img src="https://www.unirad-berlin.de/assets/tool_racks.jpg"></div>
+<div class="einNam">Unirad</div>
+<div class="Öffn">Mo 18:00-21:00, Mi 17:00-21:00; PAUSE=SEMESTERFERIEN</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Einsteinufer 25, 10587 Berlin</div>
+<div class="Kontakt"><a href="https://www.unirad-berlin.de/">https://www.unirad-berlin.de/</a></div>
+<iframe class="geodat" 
+src="https://www.openstreetmap.org/export/embed.html?bbox=13.3258574%2C52.5151754%2C13.3294574%2C52.5187754&layer=mapnik&marker=52.5169754%2C13.3276574">
+</iframe>
+<div class="BewDat"></div>
+</div>
+---
+## Mitte
+
+---
+<!-- Hub-Schrauber -->
+<div class="Rahmen" id="Hubschrauber">
+<div class="Foto"><img src="https://hub-schrauber.de/wp-content/uploads/2021/12/IMG_0158-scaled.jpg"></div>
+<div class="einNam">Hub-Schrauber</div>
+<div class="Öffn">Mo 18:00-20:00, Di 17:00-20:00, Mi 14:00-17:00, Do 17:00-19:00; PAUSE=SEMESTERFERIEN</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Am Weidendamm 3, 10117 Berlin</div>
+<div class="Kontakt"><a href="https://hub-schrauber.de">https://hub-schrauber.de</a></div>
+<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.3884650%2C52.5198950%2C13.3924650%2C52.5238950&layer=mapnik&marker=52.5218950%2C13.3904650"></iframe>
+<div class="BewDat"></div>
+</div>
+
+
+---
+
+## Schöneberg
+
+---
+<!-- kidbike --> 
+<div class="Rahmen" id="kidbike">
+<div class="Foto"><img src="https://le-cdn.website-editor.net/fcfc990afef047e884e23f395284676d/dms3rep/multi/opt/IMG_1097-1920w.JPG"></div>
+<div class="einNam">kidbike</div>
+<div class="Öffn">Di 15:00-18:00; BIS=25.11.</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Bessemerstraße 2–14. 12103 Berlin </div>
+<div class="Kontakt"><a href="https://www.kidbike.de/fahrradreparatur">https://www.kidbike.de/fahrradreparatur</a></div>
+<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.3645583%2C52.4644167%2C13.3685583%2C52.4684167&layer=mapnik&marker=52.4664167%2C13.3665583"></iframe>
+<div class="BewDat"></div>
+</div>
+
+---
+
+## Wilmersdorf
+
+
+
+<!-- Haus der Nachbarschaft -->
+<div class="Rahmen" id="schoelerpark">
+<div class="Foto"><img src="https://static.wixstatic.com/media/d777f5_c40d8d15d17e4f60b0816c9eb2f821a8~mv2.jpg/v1/fill/w_693,h_390,al_c,q_80,usm_0.66_1.00_0.01,enc_auto/d777f5_c40d8d15d17e4f60b0816c9eb2f821a8~mv2.jpg"></div>
+<div class="einNam">Haus der Nachbarschafft am Shoelerpark</div>
+<div class="Öffn">Mi 15:00-18:00, Sa 12:00-17:00</div>
+<div class="ZugangBeson"></div>
+	<div class="Adresse">Straße am Schoelerpark 37, 10715 Berlin</div>
+<div class="Kontakt"><a href="https://www.nachbarschafft-ev.de/fahrradwerkstatt">https://www.nachbarschafft-ev.de/fahrradwerkstatt</a></div>
+<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.3221358%2C52.4819554%2C13.3261358%2C52.4859554&layer=mapnik&marker=52.4839554%2C13.3241358"></iframe>
+<div class="BewDat"></div>
+</div>
+
+---
+## Steglitz-Zehlendorf
+
+---
+<!-- fu-rad -->
+<div class="Rahmen" id="FU-Rad">
+<div class="Foto"><img src="https://userblogs.fu-berlin.de/furad/files/2022/08/photo009-1024x768.jpg"></div>
+<div class="einNam">FU-Rad</div>
+<div class="Öffn">Mo 15:00-19:00; PAUSE=SEMESTERFERIEN</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Fabeckstraße 30, 14195 Berlin</div>
+<div class="Kontakt"><a href="https://userblogs.fu-berlin.de/furad/">https://userblogs.fu-berlin.de/furad/</a></div>
+<iframe class="geodat"
+src="https://www.openstreetmap.org/export/embed.html?bbox=13.2855%2C52.4477%2C13.2891%2C52.4513&layer=mapnik&marker=52.4495%2C13.2873">
+</iframe>
+<div class="BewDat"></div>
+</div>
+	
+---
+
+<!-- Mittelhof --> 
+<div class="Rahmen" id="Mittelhof">
+<div class="Foto"><img src="https://www.mittelhof.org/media/filer_public_thumbnails/filer_public/ea/eb/eaebb67f-edc2-4775-ac23-c14ce875d142/mittelhof-raume-2023-c-joerg-farys-171.jpg__800x450_q85_crop_subsampling-2_upscale.jpg"></div>
+<div class="einNam">Selbsthilfewerkstatt Mittelhof</div>
+<div class="Öffn">Fr 16:00-19:00</div>
+<div class="ZugangBeson"></div>
+	<div class="Adresse">Königstraße 42 - 43, 
+14163 Berlin</div>
+<div class="Kontakt"><a href="https://www.mittelhof.org/angebote/fahrrad-selbsthilfewerkstatt-1/">https://www.mittelhof.org/angebote/fahrrad-selbsthilfewerkstatt-1/</a></div>
+<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.2519722%2C52.4318201%2C13.2559722%2C52.4358201&layer=mapnik&marker=52.4338201%2C13.2539722"></iframe>
+<div class="BewDat"></div>
+</div>
+	
+
+---
+## Moabit
+
+---
+<!-- Ratschlag Moabit -->
+<div class="Rahmen" id="ratschlag-moabit">
+<div class="Foto"><img src="https://moabiter-ratschlag.de/wp-content/uploads/2023/05/csm_Fensterfest_2020_LF_01_f6019f06d1.jpg"></div>
+<div class="einNam">Ratschlag Moabit</div>
+<div class="Öffn">--</div>
+<div class="ZugangBeson">Von April bis September können Interessierte an zwei Samstagen im Monat zwischen 12 und 16 Uhr im Hof des Stadtschlosses Moabit ihr Fahrrad reparieren.</div>
+<div class="Adresse">Rostocker Str 32/32B, 
+10553 Berlin</div>
+<div class="Kontakt"><a href="https://moabiter-ratschlag.de/angebote/fahrrad-selbsthilfe-werkstatt-2/">https://moabiter-ratschlag.de/angebote/fahrrad-selbsthilfe-werkstatt-2/</a></div>
+	<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.3242740%2C52.5297690%2C13.3282740%2C52.5337690&layer=mapnik&marker=52.5317690%2C13.3262740"></iframe>
+<div class="BewDat"></div>
+</div>
+
+---
+
+<!-- 35services -->
+<div class="Rahmen" id="35services">
+<div class="Foto"><img src="https://i.imgur.com/s6XBYJY.png"></div>
+<div class="einNam">35services</div>
+<div class="Öffn">--</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Lehrter Str. 35, 10557 Berlin </div>
+<div class="Kontakt"><a href="https://35services.de/termine-oeffnungszeiten/oeffnungszeiten/">Kalender</a></div>
+	<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.3579000%2C52.5312000%2C13.3619000%2C52.5352000&layer=mapnik&marker=52.5332000%2C13.3599000"></iframe>
+<div class="BewDat"></div>
+</div>
+
+
+## Pankow Weißensee	
+	
+---
+	
+<!-- bikekichen -->
+<div class="Rahmen" id="kubiz">
+<div class="Foto"><img src="https://bikekitchennortheast.wordpress.com/wp-content/uploads/2013/10/pa090027.jpg"></div>
+<div class="einNam">bike kitchen im kubiz</div>
+<div class="Öffn">Mi 17:30-20:30, Do 16:00-19:00</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Bernkasteler Straße 78, 13088 Berlin</div>
+<div class="Kontakt"><a href="https://bikekitchennortheast.wordpress.com/">https://bikekitchennortheast.wordpress.com/</a></div>
+<iframe class="geodat"
+  src="https://www.openstreetmap.org/export/embed.html?bbox=13.4549917%2C52.5548216%2C13.4585917%2C52.5584216&layer=mapnik&marker=52.5566216%2C13.4567917">
+</iframe>
+<div class="BewDat"></div>
+</div>
+
+---
+	
+## Neukölln
+	
+---
+<!-- Re-Cycle -->
+<div class="Rahmen" id=NHU>
+<div class="Foto"><img src="https://nhu-ev.org/wp-content/uploads/2021/11/Fahrradwerkstatt4-scaled.jpg"></div>
+<div class="einNam">Re-Cycle im Nachbarschaftshaus Urbanstrasse</div>
+<div class="Öffn">Di 15:00-18:00</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Urbanstraße 21, 10961  Berlin</div>
+<div class="Kontakt"><a href="https://www.nachbarschaftshaus.de/angebote/recycle-offene-selbsthilfe-fahrradwerkstatt/">https://www.nachbarschaftshaus.de/angebote/recycle-offene-selbsthilfe-fahrradwerkstatt/</a></div>
+<iframe
+  class="geodat"
+  src="https://www.openstreetmap.org/export/embed.html?bbox=13.4056786%2C52.4910628%2C13.4092786%2C52.4946628&layer=mapnik&marker=52.4928628%2C13.4074786">
+</iframe>
+<div class="BewDat"></div>	
+</div>	
+	
+---	
+<!-- plattenladenkollektiv -->
+<div class="Rahmen" id="plattenladen">
+<div class="Foto"><img src="https://plattenladenkollektiv.de/wp-content/uploads/2023/12/PLK-Workshop-1.png"></div>
+<div class="einNam">plattenladenkollektiv</div>
+<div class="Öffn">Mo 18:00-21:00, 22.10.26, 05.11.26, 19.11.26, 03.12.26, 17.12.26</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Neckarstraße 19, Berlin-Neukölln</div>
+<div class="Kontakt"><a href="https://plattenladenkollektiv.de/#werkstatt">https://plattenladenkollektiv.de/#werkstatt</a></div>
+<iframe class="geodat"
+src="https://www.openstreetmap.org/export/embed.html?bbox=13.43224%2C52.47823%2C13.43584%2C52.48183&layer=mapnik&marker=52.48003%2C13.43404">
+</iframe>
+<div class="BewDat"></div>
+</div>
+	
+---	
+## Lichtenberg
+		
+
+		
+<!-- garage 10  --> 
+<div class="Rahmen" id="garage10">
+<div class="Foto"><img src="https://www.garage10.org/media/garage10-eV_fahrradwerkstatt-kultschule.jpg"></div>
+<div class="einNam">Garage10 Fahrradwerkstatt</div>
+<div class="Öffn">Mi+Fr+Sa 11:00-17:00</div>
+<div class="ZugangBeson"></div>
+<div class="Adresse">Sewanstraße 43, 10319 Berlin</div>
+<div class="Kontakt"><a href="https://www.garage10.org/">https://www.garage10.org/</a></div>
+<iframe class="geodat"
+ src="https://www.openstreetmap.org/export/embed.html?bbox=13.5233%2C52.4954%2C13.5269%2C52.4990&layer=mapnik&marker=52.4972%2C13.5251">
+</iframe>
+<div class="BewDat"></div>		
+</div>		
+
+---		
+## Karow
+
+<!-- Pankgräfin -->
+<div class="Rahmen" id="pankgraefin">
+<div class="Foto"><img src="https://pankgraefin.de/files/Projekte/Fahrradwerkstatt/Galerie/11.jpg"></div>
+<div class="einNam">Pankgräfin</div>
+<div class="Öffn">Mi 15:00-20:00</div>
+<div class="ZugangBeson"></div>
+	<div class="Adresse">Pankgrafenstrasse 12d,
+ 	13125 Berlin</div>
+<div class="Kontakt"><a href="https://pankgraefin.de/fahrradwerkstatt.html">https://pankgraefin.de/fahrradwerkstatt.html</a></div>
+<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.4524969%2C52.6135043%2C13.4564969%2C52.6175043&layer=mapnik&marker=52.6155043%2C13.4544969"></iframe>
+<div class="BewDat"></div>
+</div>
+
+---
+## Adlershof
+
+<!-- Kiezclub -->
+<div class="Rahmen" id="kiezklub-alte-schule">
+<div class="Foto"><img src="https://i.imgur.com/yGUYlus.png"></div>
+<div class="einNam">Kiezklub Alte Schule</div>
+<div class="Öffn">Do 16:00h-18:00; REGEL=1.MO_MONAT</div>
+<div class="ZugangBeson"></div>
+	<div class="Adresse">Dörpfeldstraße 54/56, 
+12489 Berlin</div>
+<div class="Kontakt"><a href="https://www.berlin.de/ba-treptow-koepenick/politik-und-verwaltung/aemter/amt-fuer-soziales/kiezklubs/kiezklub-alte-schule/artikel.746716.php#veranstaltung">Quelle</a></div>
+<iframe class="geodat" src="https://www.openstreetmap.org/export/embed.html?bbox=13.5477690%2C52.4368690%2C13.5517690%2C52.4408690&layer=mapnik&marker=52.4388690%2C13.5497690"></iframe>
+<div class="BewDat"></div>
+</div>	
+	
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

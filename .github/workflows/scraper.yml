@@ -1,10 +1,5 @@
 name: Fahrradtermine Berlin scraping
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 on:
   workflow_dispatch:
   schedule:
@@ -12,10 +7,15 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Repository auschecken
         uses: actions/checkout@v4
@@ -45,27 +45,20 @@ jobs:
 
       - name: Getrennte HedgeDoc-HTML-Dateien erzeugen
         run: python src/to_html.py
-        
-      # Im Workflow NACH "Getrennte HedgeDoc-HTML-Dateien erzeugen" einfügen:
+
       - name: Versammlungsbehörde scrapen
         run: python src/scraper_versammlungsbehoerde.py
 
-
-      # In .github/workflows/scrape.yml direkt NACH dem Schritt einfügen,
-      # der alle normalen Event-HTML-Dateien mit src/to_html.py erzeugt.
-      # Wichtig: Dieser Schritt muss nach dem allgemeinen HTML-Konverter kommen,
-      # damit dessen leere werkstaetten.html nicht mehr überschreibt.
-
-      - name: Render Werkstätten HTML
+      # Läuft nach dem allgemeinen HTML-Konverter, damit dieser die Datei nicht überschreibt.
+      - name: Werkstätten-HTML rendern
         run: python src/render_werkstaetten.py
 
-      # Unter deinem vorhandenen Job (z. B. jobs: -> scrape:) neben 'runs-on:' ergänzen:
-      
-        environment:
-          name: github-pages
-          url: ${{ steps.deployment.outputs.page_url }}  
-      
-      
+      - name: GitHub-Pages-Dateien vorbereiten
+        run: python src/prepare_github_pages.py
+
+      - name: GitHub Pages konfigurieren
+        uses: actions/configure-pages@v5
+
       - name: JSON und HTML als Artefakte bereitstellen
         uses: actions/upload-artifact@v4
         with:
@@ -77,28 +70,19 @@ jobs:
             output/candidates_werkstaetten.json
             output/candidates.json
             output/candidates_versammlungsbehoerde.json
-
             output/fahrradtermine.html
             output/velodemo.html
             output/adfc.html
             output/werkstaetten.html
             output/versammlungsbehoerde.html
-
-        - name: GitHub-Pages-Dateien vorbereiten
-          run: python src/prepare_github_pages.py
-
-        - name: GitHub Pages konfigurieren
-          uses: actions/configure-pages@v5
-
-        - name: Kalender für GitHub Pages hochladen
-          uses: actions/upload-pages-artifact@v4
-          with:
-          path: _site
-
-        - name: Kalender auf GitHub Pages veröffentlichen
-          id: deployment
-          uses: actions/deploy-pages@v4
-
-            
           if-no-files-found: error
           retention-days: 14
+
+      - name: Kalender für GitHub Pages hochladen
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Kalender auf GitHub Pages veröffentlichen
+        id: deployment
+        uses: actions/deploy-pages@v4

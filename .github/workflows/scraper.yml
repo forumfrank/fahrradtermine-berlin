@@ -1,5 +1,10 @@
 name: Fahrradtermine Berlin scraping
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 on:
   workflow_dispatch:
   schedule:
@@ -40,7 +45,7 @@ jobs:
 
       - name: Getrennte HedgeDoc-HTML-Dateien erzeugen
         run: python src/to_html.py
-
+        
       # Im Workflow NACH "Getrennte HedgeDoc-HTML-Dateien erzeugen" einfügen:
       - name: Versammlungsbehörde scrapen
         run: python src/scraper_versammlungsbehoerde.py
@@ -54,6 +59,13 @@ jobs:
       - name: Render Werkstätten HTML
         run: python src/render_werkstaetten.py
 
+      # Unter deinem vorhandenen Job (z. B. jobs: -> scrape:) neben 'runs-on:' ergänzen:
+      
+        environment:
+          name: github-pages
+          url: ${{ steps.deployment.outputs.page_url }}  
+      
+      
       - name: JSON und HTML als Artefakte bereitstellen
         uses: actions/upload-artifact@v4
         with:
@@ -71,6 +83,21 @@ jobs:
             output/adfc.html
             output/werkstaetten.html
             output/versammlungsbehoerde.html
+
+        - name: GitHub-Pages-Dateien vorbereiten
+          run: python src/prepare_github_pages.py
+
+        - name: GitHub Pages konfigurieren
+          uses: actions/configure-pages@v5
+
+        - name: Kalender für GitHub Pages hochladen
+          uses: actions/upload-pages-artifact@v4
+          with:
+          path: _site
+
+        - name: Kalender auf GitHub Pages veröffentlichen
+          id: deployment
+          uses: actions/deploy-pages@v4
 
             
           if-no-files-found: error

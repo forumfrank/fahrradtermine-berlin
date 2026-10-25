@@ -118,8 +118,14 @@ self.addEventListener("fetch",e=>{const r=e.request;if(r.method!=="GET"||new URL
     for size in (192, 512):
         target = SITE_DIR / 'icons' / f'icon-{size}.png'
         supplied = icon_dir / f'icon-{size}.png'
-        if supplied.is_file(): shutil.copy2(supplied, target)
-        else: make_icon(size, target)
+        # Zielordner muss existieren, bevor ein bereitgestelltes Logo kopiert wird.
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if supplied.is_file():
+            shutil.copy2(supplied, target)
+            print(f"PWA-Logo übernommen: {supplied} -> {target}")
+        else:
+            make_icon(size, target)
+            print(f"PWA-Logo erzeugt: {target}")
     (SITE_DIR/'.nojekyll').write_text('',encoding='utf-8')
     print(f"PWA bereit: _site/index.html; {len(available)} Kalender; Manifest, Service Worker und Icons erzeugt.")
 if __name__ == '__main__': main()

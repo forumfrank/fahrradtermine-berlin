@@ -1,0 +1,16 @@
+Die zuletzt gezeigte scrape.yml enthält bereits die nötigen Pages-Schritte. Die Reihenfolge muss sein:
+
+- alle Scraper und Renderer
+- name: GitHub-Pages-Dateien vorbereiten
+  run: python src/prepare_github_pages.py
+- name: GitHub Pages konfigurieren
+  uses: actions/configure-pages@v5
+- name: Kalender für GitHub Pages hochladen
+  uses: actions/upload-pages-artifact@v4
+  with:
+    path: _site
+- name: Kalender auf GitHub Pages veröffentlichen
+  id: deployment
+  uses: actions/deploy-pages@v4
+
+Wenn das bei dir so steht, musst du die Workflow-Datei nicht ändern.

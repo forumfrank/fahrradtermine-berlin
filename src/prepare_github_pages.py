@@ -113,7 +113,13 @@ self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener("fetch",e=>{const r=e.request;if(r.method!=="GET"||new URL(r.url).origin!==self.location.origin)return;const u=new URL(r.url);const cal=u.pathname.endsWith(".html")&&!u.pathname.endsWith("index.html");if(cal){e.respondWith(fetch(r).then(res=>{if(res.ok)caches.open(CACHE_NAME).then(c=>c.put(r,res.clone()));return res}).catch(()=>caches.match(r)));return}e.respondWith(fetch(r).then(res=>{if(res.ok)caches.open(CACHE_NAME).then(c=>c.put(r,res.clone()));return res}).catch(()=>caches.match(r).then(c=>c||caches.match("./index.html"))))});
 ''',encoding='utf-8')
-    make_icon(192,SITE_DIR/'icons'/'icon-192.png'); make_icon(512,SITE_DIR/'icons'/'icon-512.png')
+    # Verwende die mitgelieferten transparenten Logo-Icons, falls vorhanden.
+    icon_dir = ASSET_DIR / 'icons'
+    for size in (192, 512):
+        target = SITE_DIR / 'icons' / f'icon-{size}.png'
+        supplied = icon_dir / f'icon-{size}.png'
+        if supplied.is_file(): shutil.copy2(supplied, target)
+        else: make_icon(size, target)
     (SITE_DIR/'.nojekyll').write_text('',encoding='utf-8')
     print(f"PWA bereit: _site/index.html; {len(available)} Kalender; Manifest, Service Worker und Icons erzeugt.")
 if __name__ == '__main__': main()
